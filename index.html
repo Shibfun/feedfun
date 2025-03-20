@@ -162,7 +162,7 @@
         <div class="section">
             <div class="section-title">10 Players Game</div>
             <div class="button-group">
-                <button id="betButton">Bet 10B FEED</button>
+                <button id="betButton">Bet <span id="tenBetAmount">?</span> FEED</button>
             </div>
             <div class="bet-position" id="betPosition">You are not in this round yet!</div>
             <table class="bets-table">
@@ -173,29 +173,29 @@
         <div class="section">
             <div class="section-title">Coin Flip Game</div>
             <div class="button-group">
-                <button id="coinHeadsButton">Heads (1B FEED)</button>
-                <button id="coinTailsButton">Tails (1B FEED)</button>
+                <button id="coinHeadsButton">Heads (<span id="coinBetAmount">?</span> FEED)</button>
+                <button id="coinTailsButton">Tails (<span id="coinBetAmountDuplicate">?</span> FEED)</button>
             </div>
             <div class="game-info">Your Losses: <span id="coinLosses">0</span></div>
         </div>
         <div class="section">
             <div class="section-title">How to Play</div>
-<div class="rules-text">
-    <strong>10 Players Game:</strong><br>
-    1. Each player bets 100B FEED (requires a referrer).<br>
-    2. 10 players per round.<br>
-    3. Winner gets 800B FEED.<br>
-    4. 88B FEED distributed to 10 levels of referrers.<br>
-    5. 112B FEED goes to the Coin Flip pool.<br>
-    6. The 10th bet automatically settles the round.<br>
-    * Note: The 10th player needs 50% more Gas.<br>
-    * Approve FEED first.<br>
-    <strong>Coin Flip Game:</strong><br>
-    1. Bet 10B FEED (no referrer needed).<br>
-    2. 40% chance to win 20B FEED.<br>
-    3. Lost amounts go to the pool.<br>
-    4. Pauses if the pool is below 20B FEED.
-</div>
+            <div class="rules-text" id="rulesText">
+                <strong>10 Players Game:</strong><br>
+                1. Each player bets <span id="tenBetRule">?</span> FEED (requires a referrer).<br>
+                2. 10 players per round.<br>
+                3. Winner gets <span id="tenWinRule">?</span> FEED.<br>
+                4. 88B FEED distributed to 10 levels of referrers.<br>
+                5. 112B FEED goes to the Coin Flip pool.<br>
+                6. The 10th bet automatically settles the round.<br>
+                * Note: The 10th player needs 50% more Gas.<br>
+                * Approve FEED first.<br>
+                <strong>Coin Flip Game:</strong><br>
+                1. Bet <span id="coinBetRule">?</span> FEED (no referrer needed).<br>
+                2. 40% chance to win <span id="coinWinRule">?</span> FEED.<br>
+                3. Lost amounts go to the pool.<br>
+                4. Pauses if the pool is below <span id="coinWinRuleDuplicate">?</span> FEED.
+            </div>
         </div>
         <div class="section">
             <div class="section-title">10 Players History (Last 10)</div>
@@ -314,7 +314,7 @@
                 coinGameHistory.slice().reverse().forEach((game) => {
                     if (game.player !== '0x0000000000000000000000000000000000000000') {
                         const result = game.won ? 'Won' : 'Lost';
-                        const amount = game.won ? '2B FEED' : '0 FEED';
+                        const amount = game.won ? `${web3.utils.fromWei(await contract.methods.COIN_WIN_REWARD().call(), 'ether')} FEED` : '0 FEED';
                         coinHistoryTable += `<tr><td>${game.player.slice(0, 6)}...${game.player.slice(-4)}</td><td>${result}</td><td>${amount}</td></tr>`;
                     }
                 });
@@ -326,9 +326,29 @@
                 const [tenLosses, coinLosses] = await contract.methods.getLossCount(accounts[0]).call();
                 document.getElementById('coinLosses').innerText = coinLosses;
 
+                const tenBetAmount = await contract.methods.TEN_BET_AMOUNT().call();
+                const tenBetAmountEther = web3.utils.fromWei(tenBetAmount, 'ether');
+                document.getElementById('tenBetAmount').innerText = tenBetAmountEther;
+                document.getElementById('tenBetRule').innerText = tenBetAmountEther;
+
+                const tenWinReward = await contract.methods.TEN_WINNER_REWARD().call();
+                const tenWinRewardEther = web3.utils.fromWei(tenWinReward, 'ether');
+                document.getElementById('tenWinRule').innerText = tenWinRewardEther;
+
+                const coinBetAmount = await contract.methods.COIN_BET_AMOUNT().call();
+                const coinBetAmountEther = web3.utils.fromWei(coinBetAmount, 'ether');
+                document.getElementById('coinBetAmount').innerText = coinBetAmountEther;
+                document.getElementById('coinBetAmountDuplicate').innerText = coinBetAmountEther;
+                document.getElementById('coinBetRule').innerText = coinBetAmountEther;
+
+                const coinWinReward = await contract.methods.COIN_WIN_REWARD().call();
+                const coinWinRewardEther = web3.utils.fromWei(coinWinReward, 'ether');
+                document.getElementById('coinWinRule').innerText = coinWinRewardEther;
+                document.getElementById('coinWinRuleDuplicate').innerText = coinWinRewardEther;
+
                 const coinPoolValue = web3.utils.fromWei(coinPool, 'ether');
                 const coinButtons = [document.getElementById('coinHeadsButton'), document.getElementById('coinTailsButton')];
-                coinButtons.forEach(btn => btn.disabled = coinPoolValue < 2);
+                coinButtons.forEach(btn => btn.disabled = Number(coinPoolValue) < Number(coinWinRewardEther));
             } catch (error) {
                 console.error('UI update failed:', error);
             }
@@ -383,7 +403,7 @@
                 showModal(`Operation failed: ${error.message}`);
             } finally {
                 button.classList.remove('loading');
-                button.innerText = "Bet 100B FEED";
+                button.innerText = `Bet ${document.getElementById('tenBetAmount').innerText} FEED`;
             }
         }
 
@@ -409,7 +429,7 @@
                 showModal(`Operation failed: ${error.message}`);
             } finally {
                 button.classList.remove('loading');
-                button.innerText = guess ? "Heads (10B FEED)" : "Tails (10B FEED)";
+                button.innerText = guess ? `Heads (${document.getElementById('coinBetAmount').innerText} FEED)` : `Tails (${document.getElementById('coinBetAmount').innerText} FEED)`;
             }
         }
 
