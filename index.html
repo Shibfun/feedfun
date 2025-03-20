@@ -162,7 +162,7 @@
         <div class="section">
             <div class="section-title">10 Players Game</div>
             <div class="button-group">
-                <button id="betButton">Bet 100B FEED</button>
+                <button id="betButton">Bet 10B FEED</button>
             </div>
             <div class="bet-position" id="betPosition">You are not in this round yet!</div>
             <table class="bets-table">
@@ -173,8 +173,8 @@
         <div class="section">
             <div class="section-title">Coin Flip Game</div>
             <div class="button-group">
-                <button id="coinHeadsButton">Heads (10B FEED)</button>
-                <button id="coinTailsButton">Tails (10B FEED)</button>
+                <button id="coinHeadsButton">Heads (1B FEED)</button>
+                <button id="coinTailsButton">Tails (1B FEED)</button>
             </div>
             <div class="game-info">Your Losses: <span id="coinLosses">0</span></div>
         </div>
@@ -182,19 +182,19 @@
             <div class="section-title">How to Play</div>
             <div class="rules-text">
                 <strong>10 Players Game:</strong><br>
-                1. Each player bets 100B FEED (requires a referrer).<br>
+                1. Each player bets 10B FEED (requires a referrer).<br>
                 2. 10 players per round.<br>
-                3. Winner gets 800B FEED.<br>
-                4. 88B FEED distributed to 10 levels of referrers.<br>
-                5. 112B FEED goes to the Coin Flip pool.<br>
+                3. Winner gets 80B FEED.<br>
+                4. 8.8B FEED distributed to 10 levels of referrers.<br>
+                5. 11.2B FEED goes to the Coin Flip pool.<br>
                 6. The 10th bet automatically settles the round.<br>
                 * Note: The 10th player needs 50% more Gas.<br>
                 * Approve FEED first.<br>
                 <strong>Coin Flip Game:</strong><br>
-                1. Bet 10B FEED (requires a referrer).<br>
-                2. 40% chance to win 18B FEED, referrer gets 2B FEED.<br>
+                1. Bet 1B FEED (requires a referrer).<br>
+                2. 40% chance to win 1.8B FEED, referrer gets 0.2B FEED.<br>
                 3. Lost amounts go to the pool.<br>
-                4. Pauses if the pool is below 20B FEED.
+                4. Pauses if the pool is below 2B FEED.
             </div>
         </div>
         <div class="section">
@@ -280,7 +280,7 @@
 
         function formatAmount(amount) {
             const feed = web3.utils.fromWei(amount, 'ether');
-            return (feed / 100000000).toFixed(0) + 'B FEED';
+            return (feed / 1000000000).toFixed(1) + 'B FEED';
         }
 
         async function connectWallet() {
@@ -360,7 +360,7 @@
                     if (game.player !== '0x0000000000000000000000000000000000000000') {
                         const result = game.won ? 'Won' : 'Lost';
                         const coinResult = game.won ? (game.guess ? 'Heads' : 'Tails') : (game.guess ? 'Tails' : 'Heads');
-                        const amount = game.won ? '18B FEED' : '0 FEED';
+                        const amount = game.won ? '1.8B FEED' : '0 FEED';
                         coinHistoryTable += `<tr><td>${game.player.slice(0, 6)}...${game.player.slice(-4)}</td><td>${result} (${coinResult})</td><td>${amount}</td></tr>`;
                     }
                 });
@@ -372,10 +372,10 @@
                 const [tenLosses, coinLosses] = await contract.methods.getLossCount(accounts[0]).call();
                 document.getElementById('coinLosses').innerText = coinLosses;
 
-                const coinPoolValue = web3.utils.fromWei(coinPool, 'ether') / 100000000;
+                const coinPoolValue = web3.utils.fromWei(coinPool, 'ether') / 1000000000;
                 const coinButtons = [document.getElementById('coinHeadsButton'), document.getElementById('coinTailsButton')];
                 coinButtons.forEach(btn => {
-                    btn.disabled = coinPoolValue < 20 || referrer === '0x0000000000000000000000000000000000000000';
+                    btn.disabled = coinPoolValue < 2 || referrer === '0x0000000000000000000000000000000000000000';
                 });
             } catch (error) {
                 console.error('UI update failed:', error);
@@ -431,7 +431,7 @@
                 showModal(`Operation failed: ${error.message}`);
             } finally {
                 button.classList.remove('loading');
-                button.innerText = "Bet 100B FEED";
+                button.innerText = "Bet 10B FEED";
             }
         }
 
@@ -457,7 +457,7 @@
                 showModal(`Operation failed: ${error.message}`);
             } finally {
                 button.classList.remove('loading');
-                button.innerText = guess ? "Heads (10B FEED)" : "Tails (10B FEED)";
+                button.innerText = guess ? "Heads (1B FEED)" : "Tails (1B FEED)";
             }
         }
 
