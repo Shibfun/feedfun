@@ -367,7 +367,7 @@
         const erc20Abi = [
             {"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
             {"inputs":[{"internalType":"address","name":"spender","type":"address"},{"internalType":"uint256","name":"value","type":"uint256"}],"name":"approve","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},
-            {"inputs":[{"internalType":"address","name":"owner","type":"address"},{"internalType":"address","name":"spender","type":"address"}],"name":"allowance","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
+            {"inputs":[{"internalType":"address","name":"owner","type":"address"},{"internalType":"address","name":"spender","type":"address"}],"name":"allowance","outputs":[{"internalType":"uint256","name":"total","type":"uint256"}],"stateMutability":"view","type":"function"}
         ];
         const tokens = [
             { name: "BONE", address: "0x0000000000000000000000000000000000000000", logo: "https://woofswap.finance/image/tokens/BONE.png", validAmounts: [1, 5, 10, 50] },
@@ -536,7 +536,10 @@
                             console.warn("getUserBets 返回非预期数据，设为默认值");
                             userBets = { bets: [], total: 0 };
                         }
-                        console.log("getUserBets 返回:", JSON.stringify(userBets));
+                        // 仅保留当前周期的记录
+                        userBets.bets = userBets.bets.filter(bet => bet.period == currentPeriod);
+                        userBets.total = userBets.bets.length; // 重新计算当前周期记录总数
+                        console.log("getUserBets (当前周期) 返回:", JSON.stringify(userBets));
                     } catch (e) {
                         console.warn("getUserBets 失败: ${e.message}");
                         userBets = { bets: [], total: 0 };
@@ -596,7 +599,7 @@
                             <td>${new Date(bet.timestamp * 1000).toLocaleString('zh-CN')}</td>
                         </tr>
                     `;
-                }).join("") : "<tr><td colspan='5'>无投注记录，请确认账户或尝试投注</td></tr>";
+                }).join("") : "<tr><td colspan='5'>无当前周期投注记录，请尝试投注</td></tr>";
                 const userWinsTable = userWins.length > 0 ? userWins.map(win => {
                     const tokenName = tokens.find(t => t.address.toLowerCase() === win.token.toLowerCase())?.name || "BONE";
                     return `
@@ -646,7 +649,7 @@
                             <button class="action-button claim-rewards-button" ${isPaused ? 'disabled' : ''}>领取奖励</button>
                         </div>
                         <div class="action-box">
-                            <h5>您的投注记录 (共 ${userBets.total} 条)</h5>
+                            <h5>您的投注记录 (当前周期 ${currentPeriod}，共 ${userBets.total} 条)</h5>
                             <table class="history-table">
                                 <tr>
                                     <th>周期</th>
@@ -718,7 +721,7 @@
             if (loadMoreButton) {
                 loadMoreButton.addEventListener("click", () => {
                     currentBetPage++;
-                    loadActionCard(currentBetPage);
+                    loadActionCard(currentPage + 1);
                 });
             }
 
@@ -809,7 +812,7 @@
                 return;
             }
             if (balance < amount) {
-                showStatus(`${tokenName}余额不足。`, true);
+                showStatus(`${tokenName}余额不足。", true);
                 return;
             }
             if (isNaN(number) || number < 1 || number > 49) {
@@ -839,7 +842,7 @@
                     const tokenContract = new web3.eth.Contract(erc20Abi, tokenAddress);
                     const tokenBalance = await tokenContract.methods.balanceOf(account).call();
                     if (web3.utils.toBN(tokenBalance).lt(web3.utils.toBN(amountWei))) {
-                        showStatus(`${tokenName}余额不足。`, true);
+                        showStatus(`${tokenName}余额不足。", true);
                         return;
                     }
                     const allowance = await tokenContract.methods.allowance(account, contractAddress).call();
@@ -891,7 +894,7 @@
                 console.log("领取奖励...");
                 await contract.methods.claimRewards(currentPeriod - 1).send({ from: account });
                 showStatus("奖励领取成功！");
-                currentlyBetPage = 0;
+                currentBetPage = 0;
                 await loadActionCard(0);
             } catch (e) {
                 const msg = e.code === 4001 ? "用户拒绝交易。" : e.message.includes("revert") ? "无奖励可领取或周期过旧。" : e.message;
