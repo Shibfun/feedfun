@@ -178,7 +178,7 @@
             justify-content: center;
             transition: all 0.2s;
         }
-        .amount-buttons button:hover {
+        .amount-buttons button:hover:not(:disabled) {
             background: #FF8C00;
             color: #FFF;
             transform: scale(1.05);
@@ -187,6 +187,16 @@
             background: linear-gradient(45deg, #FF8C00, #FFA500);
             color: #FFF;
             border-color: #FF8C00;
+        }
+        .amount-buttons button:disabled {
+            background: #555;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        .selected-amount, .balance-display {
+            font-size: 0.85rem;
+            color: #FF8C00;
+            margin-bottom: 8px;
         }
         .action-box .action-button {
             padding: 8px;
@@ -327,7 +337,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/web3@1.7.0/dist/web3.min.js"></script>
     <script>
-        let web3, account;
+        let web3, account, selectedAmount = null;
         const contractAddress = "0xc3ccFd3973e830c08053D88b7dbf21ED0e873948";
         const shibarium = {
             chainId: "0x6d",
@@ -467,10 +477,10 @@
                     userWins = await contract.methods.getUserRecentWins(account).call();
                     for (const token of tokens) {
                         if (token.address === "0x0000000000000000000000000000000000000000") {
-                            tokenBalances[token.name] = web3.utils.fromWei(await web3.eth.getBalance(account), "ether");
+                            tokenBalances[token.name] = parseFloat(web3.utils.fromWei(await web3.eth.getBalance(account), "ether"));
                         } else {
                             const tokenContract = new web3.eth.Contract(erc20Abi, token.address);
-                            tokenBalances[token.name] = web3.utils.fromWei(await tokenContract.methods.balanceOf(account).call(), "ether");
+                            tokenBalances[token.name] = parseFloat(web3.utils.fromWei(await tokenContract.methods.balanceOf(account).call(), "ether"));
                         }
                         betsRemaining[token.name] = 200 - await contract.methods.betsPerPeriod(currentPeriod, account, token.address).call();
                     }
@@ -515,14 +525,14 @@
 
                 card.innerHTML = `
                     <div class="card-header">
-                        <h3>HACHI 投注合约</h3>
+                        <h3>FEED 投注合约</h3>
                         <button class="copy-button" data-address="${contractAddress}">
                             <img src="https://img.icons8.com/ios-filled/16/000000/contract.png" alt="复制合约">
                             <span class="tooltip">已复制合约地址</span>
                         </button>
                     </div>
                     <div class="card-content">
-                        <h4>HACHI 投注</h4>
+                        <h4>FEED 投注</h4>
                         <p class="description">在Shibarium上使用BONE、FEED、NEKO、TOYS或CANNED进行投注。选择1到49的号码，若匹配中奖号码，可赢44倍投注金额！</p>
                     </div>
                     <div class="action-section">
@@ -537,7 +547,8 @@
                             <select class="token-select">
                                 ${betOptions}
                             </select>
-                            <input type="number" class="bet-amount" placeholder="金额" step="0.01" min="0">
+                            <p class="balance-display">当前余额: ${parseFloat(tokenBalances[tokens[0].name] || 0).toFixed(2)} ${tokens[0].name}</p>
+                            <p class="selected-amount">未选择金额</p>
                             <div class="amount-buttons"></div>
                             <input type="number" class="bet-number" placeholder="号码 (1-49)" step="1" min="1" max="49">
                             <button class="action-button bet-button" ${isPaused ? 'disabled' : ''}>投注</button>
@@ -575,7 +586,7 @@
                         </div>
                     </div>
                 `;
-                setupCardListeners(card, contract);
+                setupCardListeners(card, contract, tokenBalances);
                 setInterval(() => {
                     document.getElementById("cstTime").innerText = getCSTTime();
                 }, 1000);
@@ -587,7 +598,7 @@
             }
         }
 
-        function setupCardListeners(card, contract) {
+        function setupCardListeners(card, contract, tokenBalances) {
             card.querySelectorAll(".copy-button").forEach(button => {
                 button.addEventListener("click", () => {
                     navigator.clipboard.writeText(button.dataset.address).then(() => {
@@ -598,19 +609,21 @@
             });
 
             const tokenSelect = card.querySelector(".token-select");
-            const betAmountInput = card.querySelector(".bet-amount");
             const betNumberInput = card.querySelector(".bet-number");
             const betButton = card.querySelector(".bet-button");
             const claimRewardsButton = card.querySelector(".claim-rewards-button");
             const amountButtonsContainer = card.querySelector(".amount-buttons");
+            const balanceDisplay = card.querySelector(".balance-display");
+            const selectedAmountDisplay = card.querySelector(".selected-amount");
 
             function updateAmountButtons() {
                 const tokenAddress = tokenSelect.value;
                 const token = tokens.find(t => t.address === tokenAddress);
                 if (!token) return;
+                const balance = parseFloat(tokenSelect.options[tokenSelect.selectedIndex].dataset.balance);
                 const validAmounts = token.validAmounts;
                 amountButtonsContainer.innerHTML = validAmounts.map(amount => `
-                    <button data-amount="${amount}">${amount.toLocaleString('zh-CN')}</button>
+                    <button data-amount="${amount}" ${balance < amount ? 'disabled title="余额不足"' : ''}>${amount.toLocaleString('zh-CN')}</button>
                 `).join("");
                 amountButtonsContainer.querySelectorAll("button").forEach(button => {
                     button.addEventListener("click", () => {
@@ -619,28 +632,23 @@
                         selectBetAmount(button.dataset.amount, card);
                     });
                 });
+                balanceDisplay.innerText = `当前余额: ${balance.toFixed(2)} ${token.name}`;
+                selectedAmount = null;
+                selectedAmountDisplay.innerText = "未选择金额";
+                updateBetButton();
             }
 
             async function updateBetButton() {
                 const tokenAddress = tokenSelect.value;
                 const betsRemaining = parseInt(tokenSelect.options[tokenSelect.selectedIndex].dataset.remaining);
-                const amount = parseFloat(betAmountInput.value);
                 const number = parseInt(betNumberInput.value);
                 const isBettingTime = await contract.methods.isBettingTime().call();
                 const isPaused = await contract.methods.paused().call();
-                let isValid = false;
-                if (tokenAddress && !isNaN(amount) && amount > 0 && number >= 1 && number <= 49 && isBettingTime && !isPaused && betsRemaining > 0) {
-                    const isValidAmount = await contract.methods.isValidAmount(tokenAddress, web3.utils.toWei(amount.toString(), "ether")).call();
-                    isValid = isValidAmount;
-                }
+                const isValid = tokenAddress && selectedAmount && number >= 1 && number <= 49 && isBettingTime && !isPaused && betsRemaining > 0;
                 betButton.disabled = !account || !isValid;
             }
 
-            tokenSelect.addEventListener("change", () => {
-                updateAmountButtons();
-                updateBetButton();
-            });
-            betAmountInput.addEventListener("input", updateBetButton);
+            tokenSelect.addEventListener("change", updateAmountButtons);
             betNumberInput.addEventListener("input", updateBetButton);
 
             updateAmountButtons();
@@ -652,10 +660,11 @@
         function selectBetAmount(amount, card) {
             const tokenSelect = card.querySelector(".token-select");
             const tokenName = tokenSelect.options[tokenSelect.selectedIndex].dataset.name;
-            const betAmountInput = card.querySelector(".bet-amount");
-            betAmountInput.value = parseFloat(amount).toFixed(tokenAddress === "0x0000000000000000000000000000000000000000" ? 2 : 0);
-            showStatus(`已选择金额：${amount} ${tokenName}`);
-            betAmountInput.dispatchEvent(new Event("input"));
+            const selectedAmountDisplay = card.querySelector(".selected-amount");
+            selectedAmount = parseFloat(amount);
+            selectedAmountDisplay.innerText = `已选择金额: ${selectedAmount.toLocaleString('zh-CN')} ${tokenName}`;
+            showStatus(`已选择金额: ${selectedAmount} ${tokenName}`);
+            updateBetButton(card);
         }
 
         async function placeBet(card, contract) {
@@ -667,7 +676,8 @@
             const tokenAddress = tokenSelect.value;
             const tokenName = tokenSelect.options[tokenSelect.selectedIndex].dataset.name;
             const betsRemaining = parseInt(tokenSelect.options[tokenSelect.selectedIndex].dataset.remaining);
-            const amount = parseFloat(card.querySelector(".bet-amount").value);
+            const balance = parseFloat(tokenSelect.options[tokenSelect.selectedIndex].dataset.balance);
+            const amount = selectedAmount;
             const number = parseInt(card.querySelector(".bet-number").value);
             const isPaused = await contract.methods.paused().call();
             if (isPaused) {
@@ -678,8 +688,12 @@
                 showStatus(`本周期${tokenName}无剩余投注次数。`, true);
                 return;
             }
-            if (isNaN(amount) || amount <= 0) {
-                showStatus("请输入有效金额。", true);
+            if (!amount) {
+                showStatus("请选择投注金额。", true);
+                return;
+            }
+            if (balance < amount) {
+                showStatus(`${tokenName}余额不足。`, true);
                 return;
             }
             if (isNaN(number) || number < 1 || number > 49) {
@@ -687,11 +701,6 @@
                 return;
             }
             const amountWei = web3.utils.toWei(amount.toString(), "ether");
-            const isValidAmount = await contract.methods.isValidAmount(tokenAddress, amountWei).call();
-            if (!isValidAmount) {
-                showStatus(`无效金额：${tokenName}。有效金额：${tokenAddress === "0x0000000000000000000000000000000000000000" ? "1, 5, 10, 50 BONE" : "1亿, 10亿, 50亿, 100亿 " + tokenName}`, true);
-                return;
-            }
             const isBettingTime = await contract.methods.isBettingTime().call();
             if (!isBettingTime) {
                 showStatus("当前非投注时间。", true);
@@ -706,8 +715,8 @@
                     await contract.methods.placeBet(tokenAddress, amountWei, number).send({ from: account, value: amountWei });
                 } else {
                     const tokenContract = new web3.eth.Contract(erc20Abi, tokenAddress);
-                    const balance = await tokenContract.methods.balanceOf(account).call();
-                    if (web3.utils.toBN(balance).lt(web3.utils.toBN(amountWei))) {
+                    const tokenBalance = await tokenContract.methods.balanceOf(account).call();
+                    if (web3.utils.toBN(tokenBalance).lt(web3.utils.toBN(amountWei))) {
                         showStatus(`${tokenName}余额不足。`, true);
                         return;
                     }
