@@ -377,6 +377,8 @@
             { name: "CANNED", address: "0x5d63C604803BbF7919953b73c89309B5CBcc227a", logo: "https://woofswap.finance/image/tokens/CANNED.png", validAmounts: [100000000, 1000000000, 5000000000, 10000000000] }
         ];
         const maxAllowance = "115792089237316195423570985008687907853269984665640564039457584007913129639935";
+        let currentBetPage = 0;
+        const betPageSize = 10;
 
         function shortenAddress(address) {
             return address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "0x...";
@@ -458,7 +460,7 @@
             actionButtons.forEach(btn => btn.disabled = true);
         }
 
-        async function loadActionCard() {
+        async function loadActionCard(page = 0) {
             const status = document.getElementById("searchStatus");
             const card = document.getElementById("actionCard");
             const spinner = document.getElementById("globalSpinner");
@@ -471,7 +473,6 @@
                 }
                 const contract = new web3.eth.Contract(contractAbi, contractAddress);
 
-                // 默认值，确保页面渲染
                 let tokenBalances = {};
                 let betsRemaining = {};
                 let currentPeriod = 0;
@@ -481,7 +482,6 @@
                 let userBets = { bets: [], total: 0 };
                 let userWins = [];
 
-                // 优先加载余额
                 if (account) {
                     for (const token of tokens) {
                         try {
@@ -499,7 +499,6 @@
                     }
                 }
 
-                // 加载其他数据
                 try {
                     console.log("调用 getCurrentPeriod...");
                     currentPeriod = await contract.methods.getCurrentPeriod().call();
@@ -530,24 +529,30 @@
 
                 if (account) {
                     try {
-                        console.log("调用 getUserBets...");
-                        userBets = await contract.methods.getUserBets(account, 0, 10).call();
+                        console.log(`调用 getUserBets(account=${account}, page=${page}, pageSize=${betPageSize})...`);
+                        userBets = await contract.methods.getUserBets(account, page, betPageSize).call();
                         if (!userBets || !Array.isArray(userBets.bets)) {
                             console.warn("getUserBets 返回非预期数据，设为默认值");
                             userBets = { bets: [], total: 0 };
                         }
+                        console.log("getUserBets 返回:", JSON.stringify(userBets));
                     } catch (e) {
                         console.warn("getUserBets 失败: ${e.message}");
                         userBets = { bets: [], total: 0 };
                     }
 
                     try {
-                        console.log("调用 getUserRecentWins...");
-                        userWins = await contract.methods.getUserRecentWins(account).call();
-                        if (!Array.isArray(userWins)) {
-                            console.warn("getUserRecentWins 返回非预期数据，设为默认值");
-                            userWins = [];
+                        console.log(`调用 getUserRecentWins(account=${account})...`);
+                        userWins = [];
+                        for (let p = currentPeriod - 9; p < currentPeriod; p++) {
+                            if (p >= 0) {
+                                let wins = await contract.methods.getUserRecentWins(account).call();
+                                if (Array.isArray(wins)) {
+                                    userWins = userWins.concat(wins.filter(win => win.period == p));
+                                }
+                            }
                         }
+                        console.log("getUserRecentWins 返回:", JSON.stringify(userWins));
                     } catch (e) {
                         console.warn("getUserRecentWins 失败: ${e.message}");
                         userWins = [];
@@ -586,7 +591,7 @@
                             <td>${new Date(bet.timestamp * 1000).toLocaleString('zh-CN')}</td>
                         </tr>
                     `;
-                }).join("") : "<tr><td colspan='5'>无投注记录</td></tr>";
+                }).join("") : "<tr><td colspan='5'>无投注记录，请确认账户或尝试投注</td></tr>";
                 const userWinsTable = userWins.length > 0 ? userWins.map(win => {
                     const tokenName = tokens.find(t => t.address.toLowerCase() === win.token.toLowerCase())?.name || "BONE";
                     return `
@@ -599,7 +604,8 @@
                             <td>${win.claimed ? "已领取" : "未领取"}</td>
                         </tr>
                     `;
-                }).join("") : "<tr><td colspan='6'>无中奖记录</td></tr>";
+                }).join("") : "<tr><td colspan='6'>无近期中奖记录</td></tr>";
+                const loadMoreButton = userBets.total > (page + 1) * betPageSize ? `<button class="action-button load-more-button">加载更多投注记录</button>` : "";
 
                 card.innerHTML = `
                     <div class="card-header">
@@ -635,7 +641,7 @@
                             <button class="action-button claim-rewards-button" ${isPaused ? 'disabled' : ''}>领取奖励</button>
                         </div>
                         <div class="action-box">
-                            <h5>您的投注记录</h5>
+                            <h5>您的投注记录 (共 ${userBets.total} 条)</h5>
                             <table class="history-table">
                                 <tr>
                                     <th>周期</th>
@@ -646,6 +652,7 @@
                                 </tr>
                                 ${userBetsTable}
                             </table>
+                            ${loadMoreButton}
                         </div>
                         <div class="action-box">
                             <h5>您的近期中奖</h5>
@@ -663,7 +670,7 @@
                         </div>
                     </div>
                 `;
-                setupCardListeners(card, contract, tokenBalances);
+                setupCardListeners(card, contract, tokenBalances, page);
                 setInterval(() => {
                     document.getElementById("cstTime").innerText = getCSTTime();
                 }, 1000);
@@ -671,7 +678,6 @@
             } catch (e) {
                 showStatus(`加载数据失败：${e.message}`, true);
                 console.error("加载数据失败:", e);
-                // 渲染基础界面
                 card.innerHTML = `
                     <div class="card-header">
                         <h3>FEED 投注合约</h3>
@@ -686,7 +692,7 @@
             }
         }
 
-        function setupCardListeners(card, contract, tokenBalances) {
+        function setupCardListeners(card, contract, tokenBalances, currentPage) {
             card.querySelectorAll(".copy-button").forEach(button => {
                 button.addEventListener("click", () => {
                     navigator.clipboard.writeText(button.dataset.address).then(() => {
@@ -702,6 +708,14 @@
             const claimRewardsButton = card.querySelector(".claim-rewards-button");
             const amountButtonsContainer = card.querySelector(".amount-buttons");
             const selectedAmountDisplay = card.querySelector(".selected-amount");
+            const loadMoreButton = card.querySelector(".load-more-button");
+
+            if (loadMoreButton) {
+                loadMoreButton.addEventListener("click", () => {
+                    currentBetPage++;
+                    loadActionCard(currentBetPage);
+                });
+            }
 
             function updateAmountButtons() {
                 const tokenAddress = tokenSelect.value;
@@ -747,6 +761,23 @@
 
             betButton.addEventListener("click", async () => await placeBet(card, contract));
             claimRewardsButton.addEventListener("click", async () => await claimRewards(card, contract));
+
+            // 监听 BetPlaced 事件
+            contract.events.BetPlaced({ filter: { user: account }, fromBlock: "latest" })
+                .on("data", async () => {
+                    console.log("检测到 BetPlaced 事件，重新加载记录");
+                    currentBetPage = 0;
+                    await loadActionCard(0);
+                })
+                .on("error", (error) => console.warn("BetPlaced 事件监听失败:", error));
+
+            // 监听 WinningNumberSet 事件
+            contract.events.WinningNumberSet({ fromBlock: "latest" })
+                .on("data", async () => {
+                    console.log("检测到 WinningNumberSet 事件，重新加载记录");
+                    await loadActionCard(currentBetPage);
+                })
+                .on("error", (error) => console.warn("WinningNumberSet 事件监听失败:", error));
         }
 
         function selectBetAmount(amount, card) {
@@ -831,9 +862,10 @@
                     await contract.methods.placeBet(tokenAddress, amountWei, number).send({ from: account });
                 }
                 showStatus("投注成功！");
-                await loadActionCard();
+                currentBetPage = 0;
+                await loadActionCard(0);
             } catch (e) {
-                const msg = e.code === 4001 ? "用户拒绝交易。" : e.message.includes("revert") ? "交易被回滚。" : e.message;
+                const msg = e.code === 4001 ? "用户拒绝交易。" : e.message.includes("revert") ? "交易被回StereoTypingError: Transaction reverted by the EVM." : e.message;
                 showStatus(`投注失败：${msg}`, true);
                 console.error("投注失败:", e);
             } finally {
@@ -871,7 +903,8 @@
                 console.log("领取奖励...");
                 await contract.methods.claimRewards(currentPeriod - 1).send({ from: account });
                 showStatus("奖励领取成功！");
-                await loadActionCard();
+                currentBetPage = 0;
+                await loadActionCard(0);
             } catch (e) {
                 const msg = e.code === 4001 ? "用户拒绝交易。" : e.message.includes("revert") ? "无奖励可领取或周期过旧。" : e.message;
                 showStatus(`领取失败：${msg}`, true);
@@ -911,7 +944,8 @@
             } else {
                 account = accounts[0];
                 document.getElementById("connectWalletButton").innerText = shortenAddress(account);
-                await loadActionCard();
+                currentBetPage = 0;
+                await loadActionCard(0);
             }
         });
 
