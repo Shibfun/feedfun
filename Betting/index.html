@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HACHI Betting</title>
+    <title>FEED 投注</title>
     <link rel="icon" type="image/png" href="https://shibarium.fun/images/favicon.png">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -311,10 +311,10 @@
 </head>
 <body>
     <div class="header">
-        <h1>HACHI Betting</h1>
+        <h1>FEED 投注</h1>
     </div>
     <div class="connect-section">
-        <button id="connectWalletButton">Connect Wallet</button>
+        <button id="connectWalletButton">连接钱包</button>
     </div>
     <div id="searchStatus" class="status"></div>
     <div class="global-spinner" id="globalSpinner"></div>
@@ -322,7 +322,7 @@
         <div class="card" id="actionCard"></div>
     </div>
     <div class="footer">
-        Powered by <a href="https://shibarium.shib.io/" target="_blank">Shibarium</a> | ShibClub © 2025
+        由 <a href="https://shibarium.shib.io/" target="_blank">Shibarium</a> 提供支持 | ShibClub © 2025
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/web3@1.7.0/dist/web3.min.js"></script>
@@ -346,7 +346,9 @@
             {"inputs":[],"name":"getPoolBalances","outputs":[{"internalType":"uint256","name":"bone","type":"uint256"},{"internalType":"uint256","name":"feed","type":"uint256"},{"internalType":"uint256","name":"neko","type":"uint256"},{"internalType":"uint256","name":"toys","type":"uint256"},{"internalType":"uint256","name":"canned","type":"uint256"}],"stateMutability":"view","type":"function"},
             {"inputs":[],"name":"isBettingTime","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
             {"inputs":[{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"isValidAmount","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
-            {"inputs":[{"internalType":"address","name":"token","type":"address"}],"name":"getPoolBalance","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
+            {"inputs":[{"internalType":"address","name":"token","type":"address"}],"name":"getPoolBalance","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+            {"inputs":[],"name":"paused","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
+            {"inputs":[{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"address","name":"","type":"address"},{"internalType":"address","name":"","type":"address"}],"name":"betsPerPeriod","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
         ];
         const erc20Abi = [
             {"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
@@ -373,6 +375,14 @@
             setTimeout(() => { status.innerText = ""; }, 5000);
         }
 
+        function getCSTTime() {
+            const now = new Date();
+            const cstOffset = 8 * 60;
+            const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+            const cst = new Date(utc + (cstOffset * 60000));
+            return cst.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+        }
+
         async function tryInitializeWeb3() {
             for (const rpc of shibarium.rpcUrls) {
                 try {
@@ -389,15 +399,15 @@
         async function connectWallet() {
             try {
                 if (!window.ethereum) {
-                    showStatus("Please install MetaMask.", true);
+                    showStatus("请安装MetaMask。", true);
                     return;
                 }
-                document.getElementById("searchStatus").innerText = "Connecting...";
+                document.getElementById("searchStatus").innerText = "连接中...";
                 document.getElementById("globalSpinner").style.display = "block";
                 web3 = new Web3(window.ethereum);
                 const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
                 if (!accounts.length) {
-                    showStatus("Please unlock wallet.", true);
+                    showStatus("请解锁钱包。", true);
                     return;
                 }
                 account = accounts[0];
@@ -414,10 +424,10 @@
                     }
                 }
                 document.getElementById("connectWalletButton").innerText = shortenAddress(account);
-                showStatus("Connected to Shibarium");
+                showStatus("已连接到Shibarium");
                 await loadActionCard();
             } catch (error) {
-                showStatus(`Connection failed: ${error.message}`, true);
+                showStatus(`连接失败：${error.message}`, true);
                 resetUI();
             } finally {
                 document.getElementById("globalSpinner").style.display = "none";
@@ -425,7 +435,7 @@
         }
 
         function resetUI() {
-            document.getElementById("connectWalletButton").innerText = "Connect Wallet";
+            document.getElementById("connectWalletButton").innerText = "连接钱包";
             document.getElementById("searchStatus").innerText = "";
             const actionButtons = document.querySelectorAll(".action-button");
             actionButtons.forEach(btn => btn.disabled = true);
@@ -436,19 +446,21 @@
             const card = document.getElementById("actionCard");
             const spinner = document.getElementById("globalSpinner");
             try {
-                status.innerText = "Loading data...";
+                status.innerText = "加载数据...";
                 spinner.style.display = "block";
                 if (!web3 && !await tryInitializeWeb3()) {
-                    showStatus("Failed to connect to Shibarium.", true);
+                    showStatus("无法连接到Shibarium。", true);
                     return;
                 }
                 const contract = new web3.eth.Contract(contractAbi, contractAddress);
                 let currentPeriod = await contract.methods.getCurrentPeriod().call();
                 let isBettingTime = await contract.methods.isBettingTime().call();
+                let isPaused = await contract.methods.paused().call();
                 let poolBalances = await contract.methods.getPoolBalances().call();
                 let userBets = { bets: [], total: 0 };
                 let userWins = [];
                 let tokenBalances = {};
+                let betsRemaining = {};
 
                 if (account) {
                     userBets = await contract.methods.getUserBets(account, 0, 10).call();
@@ -460,6 +472,7 @@
                             const tokenContract = new web3.eth.Contract(erc20Abi, token.address);
                             tokenBalances[token.name] = web3.utils.fromWei(await tokenContract.methods.balanceOf(account).call(), "ether");
                         }
+                        betsRemaining[token.name] = 200 - await contract.methods.betsPerPeriod(currentPeriod, account, token.address).call();
                     }
                 }
 
@@ -470,9 +483,9 @@
                     TOYS: ${parseFloat(web3.utils.fromWei(poolBalances.toys, "ether")).toFixed(2)}<br>
                     CANNED: ${parseFloat(web3.utils.fromWei(poolBalances.canned, "ether")).toFixed(2)}
                 `;
-                const bettingStatus = isBettingTime ? "Betting Open" : "Betting Closed (Draw Time)";
+                const bettingStatus = isPaused ? "合约已暂停" : isBettingTime ? "投注开放" : "投注关闭（抽奖时间）";
                 const betOptions = tokens.map(token => `
-                    <option value="${token.address}" data-name="${token.name}">${token.name}</option>
+                    <option value="${token.address}" data-name="${token.name}" data-balance="${tokenBalances[token.name] || 0}" data-remaining="${betsRemaining[token.name] || 200}">${token.name} (余额: ${parseFloat(tokenBalances[token.name] || 0).toFixed(2)}, 剩余投注次数: ${betsRemaining[token.name] || 200})</option>
                 `).join("");
                 const userBetsTable = userBets.bets.length > 0 ? userBets.bets.map(bet => {
                     const tokenName = tokens.find(t => t.address.toLowerCase() === bet.token.toLowerCase())?.name || "BONE";
@@ -482,10 +495,10 @@
                             <td>${tokenName}</td>
                             <td>${parseFloat(web3.utils.fromWei(bet.amount, "ether")).toFixed(2)}</td>
                             <td>${bet.number}</td>
-                            <td>${new Date(bet.timestamp * 1000).toLocaleString()}</td>
+                            <td>${new Date(bet.timestamp * 1000).toLocaleString('zh-CN')}</td>
                         </tr>
                     `;
-                }).join("") : "<tr><td colspan='5'>No bets found</td></tr>";
+                }).join("") : "<tr><td colspan='5'>无投注记录</td></tr>";
                 const userWinsTable = userWins.length > 0 ? userWins.map(win => {
                     const tokenName = tokens.find(t => t.address.toLowerCase() === win.token.toLowerCase())?.name || "BONE";
                     return `
@@ -495,71 +508,72 @@
                             <td>${parseFloat(web3.utils.fromWei(win.betAmount, "ether")).toFixed(2)}</td>
                             <td>${parseFloat(web3.utils.fromWei(win.winAmount, "ether")).toFixed(2)}</td>
                             <td>${win.number}</td>
-                            <td>${win.claimed ? "Claimed" : "Unclaimed"}</td>
+                            <td>${win.claimed ? "已领取" : "未领取"}</td>
                         </tr>
                     `;
-                }).join("") : "<tr><td colspan='6'>No wins found</td></tr>";
+                }).join("") : "<tr><td colspan='6'>无中奖记录</td></tr>";
 
                 card.innerHTML = `
                     <div class="card-header">
-                        <h3>HACHI Betting Contract</h3>
+                        <h3>HACHI 投注合约</h3>
                         <button class="copy-button" data-address="${contractAddress}">
-                            <img src="https://img.icons8.com/ios-filled/16/000000/contract.png" alt="Copy Contract">
-                            <span class="tooltip">Copied Contract</span>
+                            <img src="https://img.icons8.com/ios-filled/16/000000/contract.png" alt="复制合约">
+                            <span class="tooltip">已复制合约地址</span>
                         </button>
                     </div>
                     <div class="card-content">
-                        <h4>HACHI Betting</h4>
-                        <p class="description">Place bets with BONE, FEED, NEKO, TOYS, or CANNED on Shibarium. Choose a number between 1 and 49, and win 44x your bet if you match the winning number!</p>
+                        <h4>HACHI 投注</h4>
+                        <p class="description">在Shibarium上使用BONE、FEED、NEKO、TOYS或CANNED进行投注。选择1到49的号码，若匹配中奖号码，可赢44倍投注金额！</p>
                     </div>
                     <div class="action-section">
                         <div class="status-box">
-                            <p>Current Period: ${currentPeriod}</p>
-                            <p>Betting Status: ${bettingStatus}</p>
-                            <p>Pool Balances:<br>${poolBalanceDisplay}</p>
+                            <p>当前周期: ${currentPeriod}</p>
+                            <p>投注状态: ${bettingStatus}</p>
+                            <p>当前时间 (CST): <span id="cstTime">${getCSTTime()}</span></p>
+                            <p>奖池余额:<br>${poolBalanceDisplay}</p>
                         </div>
                         <div class="action-box">
-                            <h5>Place Bet</h5>
+                            <h5>投注</h5>
                             <select class="token-select">
                                 ${betOptions}
                             </select>
-                            <input type="number" class="bet-amount" placeholder="Amount" step="0.01" min="0">
+                            <input type="number" class="bet-amount" placeholder="金额" step="0.01" min="0">
                             <div class="percentage-buttons bet-percentages">
                                 <button data-percentage="25">25%</button>
                                 <button data-percentage="50">50%</button>
                                 <button data-percentage="75">75%</button>
-                                <button data-percentage="100">MAX</button>
+                                <button data-percentage="100">最大</button>
                             </div>
-                            <input type="number" class="bet-number" placeholder="Number (1-49)" step="1" min="1" max="49">
-                            <button class="action-button bet-button" disabled>Place Bet</button>
+                            <input type="number" class="bet-number" placeholder="号码 (1-49)" step="1" min="1" max="49">
+                            <button class="action-button bet-button" ${isPaused ? 'disabled' : ''}>投注</button>
                         </div>
                         <div class="action-box">
-                            <h5>Claim Rewards</h5>
-                            <button class="action-button claim-rewards-button">Claim Rewards</button>
+                            <h5>领取奖励</h5>
+                            <button class="action-button claim-rewards-button" ${isPaused ? 'disabled' : ''}>领取奖励</button>
                         </div>
                         <div class="action-box">
-                            <h5>Your Bets</h5>
+                            <h5>您的投注记录</h5>
                             <table class="history-table">
                                 <tr>
-                                    <th>Period</th>
-                                    <th>Token</th>
-                                    <th>Amount</th>
-                                    <th>Number</th>
-                                    <th>Time</th>
+                                    <th>周期</th>
+                                    <th>代币</th>
+                                    <th>金额</th>
+                                    <th>号码</th>
+                                    <th>时间</th>
                                 </tr>
                                 ${userBetsTable}
                             </table>
                         </div>
                         <div class="action-box">
-                            <h5>Your Recent Wins</h5>
+                            <h5>您的近期中奖</h5>
                             <table class="history-table">
                                 <tr>
-                                    <th>Period</th>
-                                    <th>Token</th>
-                                    <th>Bet Amount</th>
-                                    <th>Win Amount</th>
-                                    <th>Number</th>
-                                    <th>Status</th>
+                                    <th>周期</th>
+                                    <th>代币</th>
+                                    <th>投注金额</th>
+                                    <th>中奖金额</th>
+                                    <th>号码</th>
+                                    <th>状态</th>
                                 </tr>
                                 ${userWinsTable}
                             </table>
@@ -567,9 +581,12 @@
                     </div>
                 `;
                 setupCardListeners(card, contract);
+                setInterval(() => {
+                    document.getElementById("cstTime").innerText = getCSTTime();
+                }, 1000);
                 showStatus();
             } catch (e) {
-                showStatus(`Failed to load data: ${e.message}`, true);
+                showStatus(`加载数据失败：${e.message}`, true);
             } finally {
                 spinner.style.display = "none";
             }
@@ -581,7 +598,7 @@
                     navigator.clipboard.writeText(button.dataset.address).then(() => {
                         button.classList.add("copied");
                         setTimeout(() => button.classList.remove("copied"), 1000);
-                    }).catch(() => showStatus("Failed to copy address.", true));
+                    }).catch(() => showStatus("复制地址失败。", true));
                 });
             });
 
@@ -593,11 +610,13 @@
 
             async function updateBetButton() {
                 const tokenAddress = tokenSelect.value;
+                const betsRemaining = parseInt(tokenSelect.options[tokenSelect.selectedIndex].dataset.remaining);
                 const amount = parseFloat(betAmountInput.value);
                 const number = parseInt(betNumberInput.value);
                 const isBettingTime = await contract.methods.isBettingTime().call();
+                const isPaused = await contract.methods.paused().call();
                 let isValid = false;
-                if (tokenAddress && !isNaN(amount) && amount > 0 && number >= 1 && number <= 49 && isBettingTime) {
+                if (tokenAddress && !isNaN(amount) && amount > 0 && number >= 1 && number <= 49 && isBettingTime && !isPaused && betsRemaining > 0) {
                     const isValidAmount = await contract.methods.isValidAmount(tokenAddress, web3.utils.toWei(amount.toString(), "ether")).call();
                     isValid = isValidAmount;
                 }
@@ -622,80 +641,96 @@
 
         async function setBetAmount(percentage, card) {
             if (!web3 || !account) {
-                showStatus("Please connect wallet.", true);
+                showStatus("请连接钱包。", true);
                 return;
             }
             const tokenSelect = card.querySelector(".token-select");
             const tokenAddress = tokenSelect.value;
             const tokenName = tokenSelect.options[tokenSelect.selectedIndex].dataset.name;
             const betAmountInput = card.querySelector(".bet-amount");
-            let balance;
-            if (tokenAddress === "0x0000000000000000000000000000000000000000") {
-                balance = parseFloat(web3.utils.fromWei(await web3.eth.getBalance(account), "ether"));
-            } else {
-                const tokenContract = new web3.eth.Contract(erc20Abi, tokenAddress);
-                balance = parseFloat(web3.utils.fromWei(await tokenContract.methods.balanceOf(account).call(), "ether"));
+            let balance = parseFloat(tokenSelect.options[tokenSelect.selectedIndex].dataset.balance);
+            let amount = percentage === "100" ? balance : balance * (percentage / 100);
+            const validBoneAmounts = [1, 5, 10, 50];
+            const validErc20Amounts = [100000000, 1000000000, 5000000000, 10000000000];
+            const validAmounts = tokenAddress === "0x0000000000000000000000000000000000000000" ? validBoneAmounts : validErc20Amounts;
+            let selectedAmount = validAmounts[0];
+            for (const valid of validAmounts) {
+                if (valid <= amount) {
+                    selectedAmount = valid;
+                } else {
+                    break;
+                }
             }
-            const amount = percentage === "100" ? balance : balance * (percentage / 100);
-            betAmountInput.value = amount.toFixed(2);
+            betAmountInput.value = selectedAmount.toFixed(tokenAddress === "0x0000000000000000000000000000000000000000" ? 2 : 0);
+            showStatus(`已调整为有效金额：${selectedAmount} ${tokenName}`);
             betAmountInput.dispatchEvent(new Event("input"));
         }
 
         async function placeBet(card, contract) {
             if (!web3 || !account) {
-                showStatus("Please connect wallet.", true);
+                showStatus("请连接钱包。", true);
                 return;
             }
             const tokenSelect = card.querySelector(".token-select");
             const tokenAddress = tokenSelect.value;
             const tokenName = tokenSelect.options[tokenSelect.selectedIndex].dataset.name;
+            const betsRemaining = parseInt(tokenSelect.options[tokenSelect.selectedIndex].dataset.remaining);
             const amount = parseFloat(card.querySelector(".bet-amount").value);
             const number = parseInt(card.querySelector(".bet-number").value);
+            const isPaused = await contract.methods.paused().call();
+            if (isPaused) {
+                showStatus("合约已暂停。", true);
+                return;
+            }
+            if (betsRemaining <= 0) {
+                showStatus(`本周期${tokenName}无剩余投注次数。`, true);
+                return;
+            }
             if (isNaN(amount) || amount <= 0) {
-                showStatus("Please enter a valid amount.", true);
+                showStatus("请输入有效金额。", true);
                 return;
             }
             if (isNaN(number) || number < 1 || number > 49) {
-                showStatus("Please enter a number between 1 and 49.", true);
+                showStatus("请输入1到49的号码。", true);
                 return;
             }
             const amountWei = web3.utils.toWei(amount.toString(), "ether");
             const isValidAmount = await contract.methods.isValidAmount(tokenAddress, amountWei).call();
             if (!isValidAmount) {
-                showStatus(`Invalid amount for ${tokenName}. Valid amounts: ${tokenAddress === "0x0000000000000000000000000000000000000000" ? "1, 5, 10, 50 BONE" : "100M, 1B, 5B, 10B " + tokenName}`, true);
+                showStatus(`无效金额：${tokenName}。有效金额：${tokenAddress === "0x0000000000000000000000000000000000000000" ? "1, 5, 10, 50 BONE" : "1亿, 10亿, 50亿, 100亿 " + tokenName}`, true);
                 return;
             }
             const isBettingTime = await contract.methods.isBettingTime().call();
             if (!isBettingTime) {
-                showStatus("Betting is closed now.", true);
+                showStatus("当前非投注时间。", true);
                 return;
             }
             const button = card.querySelector(".bet-button");
             try {
                 button.classList.add("loading");
                 button.disabled = true;
-                showStatus("Processing bet...");
+                showStatus("处理投注中...");
                 if (tokenAddress === "0x0000000000000000000000000000000000000000") {
                     await contract.methods.placeBet(tokenAddress, amountWei, number).send({ from: account, value: amountWei });
                 } else {
                     const tokenContract = new web3.eth.Contract(erc20Abi, tokenAddress);
                     const balance = await tokenContract.methods.balanceOf(account).call();
                     if (web3.utils.toBN(balance).lt(web3.utils.toBN(amountWei))) {
-                        showStatus(`Insufficient ${tokenName} balance.`, true);
+                        showStatus(`${tokenName}余额不足。`, true);
                         return;
                     }
                     const allowance = await tokenContract.methods.allowance(account, contractAddress).call();
                     if (web3.utils.toBN(allowance).lt(web3.utils.toBN(amountWei))) {
-                        showStatus(`Approving ${tokenName}...`);
+                        showStatus(`授权${tokenName}中...`);
                         await tokenContract.methods.approve(contractAddress, maxAllowance).send({ from: account });
                     }
                     await contract.methods.placeBet(tokenAddress, amountWei, number).send({ from: account });
                 }
-                showStatus("Bet placed successfully!");
+                showStatus("投注成功！");
                 await loadActionCard();
             } catch (e) {
-                const msg = e.code === 4001 ? "User rejected transaction." : e.message.includes("revert") ? "Transaction reverted." : e.message;
-                showStatus(`Bet failed: ${msg}`, true);
+                const msg = e.code === 4001 ? "用户拒绝交易。" : e.message.includes("revert") ? "交易被回滚。" : e.message;
+                showStatus(`投注失败：${msg}`, true);
             } finally {
                 button.classList.remove("loading");
                 button.disabled = false;
@@ -704,21 +739,26 @@
 
         async function claimRewards(card, contract) {
             if (!web3 || !account) {
-                showStatus("Please connect wallet.", true);
+                showStatus("请连接钱包。", true);
                 return;
             }
             const currentPeriod = await contract.methods.getCurrentPeriod().call();
+            const isPaused = await contract.methods.paused().call();
+            if (isPaused) {
+                showStatus("合约已暂停。", true);
+                return;
+            }
             const button = card.querySelector(".claim-rewards-button");
             try {
                 button.classList.add("loading");
                 button.disabled = true;
-                showStatus("Processing reward claim...");
+                showStatus("处理奖励领取中...");
                 await contract.methods.claimRewards(currentPeriod - 1).send({ from: account });
-                showStatus("Rewards claimed successfully!");
+                showStatus("奖励领取成功！");
                 await loadActionCard();
             } catch (e) {
-                const msg = e.code === 4001 ? "User rejected transaction." : e.message.includes("revert") ? "No rewards available or period too old." : e.message;
-                showStatus(`Claim failed: ${msg}`, true);
+                const msg = e.code === 4001 ? "用户拒绝交易。" : e.message.includes("revert") ? "无奖励可领取或周期过旧。" : e.message;
+                showStatus(`领取失败：${msg}`, true);
             } finally {
                 button.classList.remove("loading");
                 button.disabled = false;
@@ -728,20 +768,20 @@
         document.getElementById("connectWalletButton").addEventListener("click", connectWallet);
         window.addEventListener("load", async () => {
             if (!window.location.protocol.includes("http")) {
-                showStatus('Please run via server (e.g., "npx serve").', true);
+                showStatus('请通过服务器运行（例如 "npx serve"）。', true);
                 return;
             }
             if (await tryInitializeWeb3()) {
                 await loadActionCard();
             } else {
-                showStatus("Failed to connect to Shibarium.", true);
+                showStatus("无法连接到Shibarium。", true);
             }
         });
 
         window.ethereum?.on("accountsChanged", async accounts => {
             if (!accounts.length) {
                 resetUI();
-                showStatus("Wallet disconnected.", true);
+                showStatus("钱包已断开连接。", true);
             } else {
                 account = accounts[0];
                 document.getElementById("connectWalletButton").innerText = shortenAddress(account);
