@@ -157,13 +157,13 @@
         .action-box input {
             text-align: right;
         }
-        .percentage-buttons {
+        .amount-buttons {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 6px;
             margin-bottom: 8px;
         }
-        .percentage-buttons button {
+        .amount-buttons button {
             padding: 0;
             background: #333;
             border: 1px solid #444;
@@ -178,12 +178,12 @@
             justify-content: center;
             transition: all 0.2s;
         }
-        .percentage-buttons button:hover {
+        .amount-buttons button:hover {
             background: #FF8C00;
             color: #FFF;
             transform: scale(1.05);
         }
-        .percentage-buttons button.active {
+        .amount-buttons button.active {
             background: linear-gradient(45deg, #FF8C00, #FFA500);
             color: #FFF;
             border-color: #FF8C00;
@@ -303,7 +303,7 @@
             .card-content p.description {
                 font-size: 0.85rem;
             }
-            .percentage-buttons {
+            .amount-buttons {
                 grid-template-columns: repeat(2, 1fr);
             }
         }
@@ -356,11 +356,11 @@
             {"inputs":[{"internalType":"address","name":"owner","type":"address"},{"internalType":"address","name":"spender","type":"address"}],"name":"allowance","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
         ];
         const tokens = [
-            { name: "BONE", address: "0x0000000000000000000000000000000000000000", logo: "https://woofswap.finance/image/tokens/BONE.png" },
-            { name: "FEED", address: "0xe9Cb2D7ADC24Fc59FE00D6C0A0669BDF16805Fe0", logo: "https://woofswap.finance/image/tokens/feed.png" },
-            { name: "NEKO", address: "0x63A67329f761517570345eE86f791F74f9DC5461", logo: "https://woofswap.finance/image/tokens/neko.png" },
-            { name: "TOYS", address: "0xB820c8a74c8E4059661460C414821bC5820470D8", logo: "https://woofswap.finance/image/tokens/toys.png" },
-            { name: "CANNED", address: "0x5d63C604803BbF7919953b73c89309B5CBcc227a", logo: "https://woofswap.finance/image/tokens/CANNED.png" }
+            { name: "BONE", address: "0x0000000000000000000000000000000000000000", logo: "https://woofswap.finance/image/tokens/BONE.png", validAmounts: [1, 5, 10, 50] },
+            { name: "FEED", address: "0xe9Cb2D7ADC24Fc59FE00D6C0A0669BDF16805Fe0", logo: "https://woofswap.finance/image/tokens/feed.png", validAmounts: [100000000, 1000000000, 5000000000, 10000000000] },
+            { name: "NEKO", address: "0x63A67329f761517570345eE86f791F74f9DC5461", logo: "https://woofswap.finance/image/tokens/neko.png", validAmounts: [100000000, 1000000000, 5000000000, 10000000000] },
+            { name: "TOYS", address: "0xB820c8a74c8E4059661460C414821bC5820470D8", logo: "https://woofswap.finance/image/tokens/toys.png", validAmounts: [100000000, 1000000000, 5000000000, 10000000000] },
+            { name: "CANNED", address: "0x5d63C604803BbF7919953b73c89309B5CBcc227a", logo: "https://woofswap.finance/image/tokens/CANNED.png", validAmounts: [100000000, 1000000000, 5000000000, 10000000000] }
         ];
         const maxAllowance = "115792089237316195423570985008687907853269984665640564039457584007913129639935";
 
@@ -538,12 +538,7 @@
                                 ${betOptions}
                             </select>
                             <input type="number" class="bet-amount" placeholder="金额" step="0.01" min="0">
-                            <div class="percentage-buttons bet-percentages">
-                                <button data-percentage="25">25%</button>
-                                <button data-percentage="50">50%</button>
-                                <button data-percentage="75">75%</button>
-                                <button data-percentage="100">最大</button>
-                            </div>
+                            <div class="amount-buttons"></div>
                             <input type="number" class="bet-number" placeholder="号码 (1-49)" step="1" min="1" max="49">
                             <button class="action-button bet-button" ${isPaused ? 'disabled' : ''}>投注</button>
                         </div>
@@ -607,6 +602,24 @@
             const betNumberInput = card.querySelector(".bet-number");
             const betButton = card.querySelector(".bet-button");
             const claimRewardsButton = card.querySelector(".claim-rewards-button");
+            const amountButtonsContainer = card.querySelector(".amount-buttons");
+
+            function updateAmountButtons() {
+                const tokenAddress = tokenSelect.value;
+                const token = tokens.find(t => t.address === tokenAddress);
+                if (!token) return;
+                const validAmounts = token.validAmounts;
+                amountButtonsContainer.innerHTML = validAmounts.map(amount => `
+                    <button data-amount="${amount}">${amount.toLocaleString('zh-CN')}</button>
+                `).join("");
+                amountButtonsContainer.querySelectorAll("button").forEach(button => {
+                    button.addEventListener("click", () => {
+                        amountButtonsContainer.querySelectorAll("button").forEach(btn => btn.classList.remove("active"));
+                        button.classList.add("active");
+                        selectBetAmount(button.dataset.amount, card);
+                    });
+                });
+            }
 
             async function updateBetButton() {
                 const tokenAddress = tokenSelect.value;
@@ -623,46 +636,25 @@
                 betButton.disabled = !account || !isValid;
             }
 
-            tokenSelect.addEventListener("change", updateBetButton);
+            tokenSelect.addEventListener("change", () => {
+                updateAmountButtons();
+                updateBetButton();
+            });
             betAmountInput.addEventListener("input", updateBetButton);
             betNumberInput.addEventListener("input", updateBetButton);
 
-            card.querySelectorAll(".bet-percentages button").forEach(button => {
-                button.addEventListener("click", async () => {
-                    card.querySelectorAll(".bet-percentages button").forEach(btn => btn.classList.remove("active"));
-                    button.classList.add("active");
-                    await setBetAmount(button.dataset.percentage, card);
-                });
-            });
+            updateAmountButtons();
 
             betButton.addEventListener("click", async () => await placeBet(card, contract));
             claimRewardsButton.addEventListener("click", async () => await claimRewards(card, contract));
         }
 
-        async function setBetAmount(percentage, card) {
-            if (!web3 || !account) {
-                showStatus("请连接钱包。", true);
-                return;
-            }
+        function selectBetAmount(amount, card) {
             const tokenSelect = card.querySelector(".token-select");
-            const tokenAddress = tokenSelect.value;
             const tokenName = tokenSelect.options[tokenSelect.selectedIndex].dataset.name;
             const betAmountInput = card.querySelector(".bet-amount");
-            let balance = parseFloat(tokenSelect.options[tokenSelect.selectedIndex].dataset.balance);
-            let amount = percentage === "100" ? balance : balance * (percentage / 100);
-            const validBoneAmounts = [1, 5, 10, 50];
-            const validErc20Amounts = [100000000, 1000000000, 5000000000, 10000000000];
-            const validAmounts = tokenAddress === "0x0000000000000000000000000000000000000000" ? validBoneAmounts : validErc20Amounts;
-            let selectedAmount = validAmounts[0];
-            for (const valid of validAmounts) {
-                if (valid <= amount) {
-                    selectedAmount = valid;
-                } else {
-                    break;
-                }
-            }
-            betAmountInput.value = selectedAmount.toFixed(tokenAddress === "0x0000000000000000000000000000000000000000" ? 2 : 0);
-            showStatus(`已调整为有效金额：${selectedAmount} ${tokenName}`);
+            betAmountInput.value = parseFloat(amount).toFixed(tokenAddress === "0x0000000000000000000000000000000000000000" ? 2 : 0);
+            showStatus(`已选择金额：${amount} ${tokenName}`);
             betAmountInput.dispatchEvent(new Event("input"));
         }
 
