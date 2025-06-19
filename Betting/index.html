@@ -269,6 +269,15 @@
             margin: 24px auto;
             display: none;
         }
+        .pagination {
+            margin: 8px 0;
+            display: none;
+        }
+        .pagination button {
+            padding: 6px 12px;
+            margin: 0 4px;
+            font-size: 0.8rem;
+        }
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -342,7 +351,9 @@
     <script src="https://cdn.jsdelivr.net/npm/web3@1.7.0/dist/web3.min.js"></script>
     <script>
         let web3, account, selectedAmount = null;
-        const contractAddress = "0x941525fE4E3A9f7A60d9b24C1Ba8CBDB62071EeC";
+        let currentWinsPage = 0;
+        const winsPageSize = 10;
+        const contractAddress = "0xcAB85080B97923603F23b9D96deA40841cd7B5E4";
         const shibarium = {
             chainId: "0x6d",
             chainName: "Shibarium",
@@ -355,6 +366,7 @@
             {"inputs":[{"internalType":"uint256","name":"period","type":"uint256"}],"name":"claimRewards","outputs":[],"stateMutability":"nonpayable","type":"function"},
             {"inputs":[{"internalType":"address","name":"user","type":"address"}],"name":"getUserCurrentBets","outputs":[{"components":[{"internalType":"address","name":"user","type":"address"},{"internalType":"uint256","name":"period","type":"uint256"},{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"uint256","name":"number","type":"uint256"},{"internalType":"uint256","name":"timestamp","type":"uint256"}],"internalType":"struct BettingContract.Bet[]","name":"","type":"tuple[]"}],"stateMutability":"view","type":"function"},
             {"inputs":[{"internalType":"address","name":"user","type":"address"}],"name":"getUserPreviousWins","outputs":[{"components":[{"internalType":"address","name":"user","type":"address"},{"internalType":"uint256","name":"period","type":"uint256"},{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"betAmount","type":"uint256"},{"internalType":"uint256","name":"winAmount","type":"uint256"},{"internalType":"uint256","name":"number","type":"uint256"},{"internalType":"bool","name":"claimed","type":"bool"},{"internalType":"uint256","name":"timestamp","type":"uint256"}],"internalType":"struct BettingContract.Win[]","name":"","type":"tuple[]"}],"stateMutability":"view","type":"function"},
+            {"inputs":[{"internalType":"uint256","name":"page","type":"uint256"},{"internalType":"uint256","name":"pageSize","type":"uint256"}],"name":"getAllPreviousWins","outputs":[{"components":[{"internalType":"address","name":"user","type":"address"},{"internalType":"uint256","name":"period","type":"uint256"},{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"betAmount","type":"uint256"},{"internalType":"uint256","name":"winAmount","type":"uint256"},{"internalType":"uint256","name":"number","type":"uint256"},{"internalType":"bool","name":"claimed","type":"bool"},{"internalType":"uint256","name":"timestamp","type":"uint256"}],"internalType":"struct BettingContract.Win[]","name":"","type":"tuple[]"},{"internalType":"uint256","name":"total","type":"uint256"}],"stateMutability":"view","type":"function"},
             {"inputs":[],"name":"getCurrentPeriod","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
             {"inputs":[],"name":"getPoolBalances","outputs":[{"internalType":"uint256","name":"bone","type":"uint256"},{"internalType":"uint256","name":"feed","type":"uint256"},{"internalType":"uint256","name":"neko","type":"uint256"},{"internalType":"uint256","name":"toys","type":"uint256"},{"internalType":"uint256","name":"canned","type":"uint256"}],"stateMutability":"view","type":"function"},
             {"inputs":[],"name":"isBettingTime","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
@@ -455,6 +467,88 @@
             document.getElementById("searchStatus").innerText = "";
             const actionButtons = document.querySelectorAll(".action-button");
             actionButtons.forEach(btn => btn.disabled = true);
+        }
+
+        async function loadAllPreviousWins(page) {
+            const button = document.querySelector(".view-all-wins-button");
+            const table = document.getElementById("allPreviousWinsTable");
+            const pagination = document.getElementById("pagination");
+            const pageInfo = document.getElementById("pageInfo");
+            const prevPage = document.querySelector(".prev-page");
+            const nextPage = document.querySelector(".next-page");
+
+            try {
+                button.classList.add("loading");
+                button.disabled = true;
+                showStatus("加载所有上一期中奖记录中...");
+                const contract = new web3.eth.Contract(contractAbi, contractAddress);
+                const [wins, total] = await contract.methods.getAllPreviousWins(page, winsPageSize).call();
+                const totalPages = Math.ceil(total / winsPageSize) || 1;
+
+                table.innerHTML = `
+                    <tr>
+                        <th>用户地址</th>
+                        <th>周期</th>
+                        <th>代币</th>
+                        <th>投注金额</th>
+                        <th>中奖金额</th>
+                        <th>号码</th>
+                        <th>状态</th>
+                    </tr>
+                    ${wins.length > 0 ? wins.map(win => {
+                        const tokenName = tokens.find(t => t.address.toLowerCase() === win.token.toLowerCase())?.name || "BONE";
+                        return `
+                            <tr>
+                                <td>${shortenAddress(win.user)}</td>
+                                <td>${win.period}</td>
+                                <td>${tokenName}</td>
+                                <td>${parseFloat(web3.utils.fromWei(win.betAmount, "ether")).toFixed(2)}</td>
+                                <td>${parseFloat(web3.utils.fromWei(win.winAmount, "ether")).toFixed(2)}</td>
+                                <td>${win.number}</td>
+                                <td>${win.claimed ? "已领取" : "未领取"}</td>
+                            </tr>
+                        `;
+                    }).join("") : "<tr><td colspan='7'>无上一周期中奖记录</td></tr>"}
+                `;
+
+                pagination.style.display = total > winsPageSize ? "block" : "none";
+                pageInfo.innerText = `第 ${page + 1} 页 / 共 ${totalPages} 页`;
+                prevPage.disabled = page === 0;
+                nextPage.disabled = page >= totalPages - 1;
+
+                prevPage.onclick = () => {
+                    if (page > 0) {
+                        currentWinsPage--;
+                        loadAllPreviousWins(currentWinsPage);
+                    }
+                };
+                nextPage.onclick = () => {
+                    if (page < totalPages - 1) {
+                        currentWinsPage++;
+                        loadAllPreviousWins(currentWinsPage);
+                    }
+                };
+
+                showStatus("加载完成");
+            } catch (e) {
+                showStatus(`加载失败：${e.message}`, true);
+                console.error("加载所有上一期中奖记录失败:", e);
+                table.innerHTML = `
+                    <tr>
+                        <th>用户地址</th>
+                        <th>周期</th>
+                        <th>代币</th>
+                        <th>投注金额</th>
+                        <th>中奖金额</th>
+                        <th>号码</th>
+                        <th>状态</th>
+                    </tr>
+                    <tr><td colspan='7'>加载失败，请重试</td></tr>
+                `;
+            } finally {
+                button.classList.remove("loading");
+                button.disabled = false;
+            }
         }
 
         async function loadActionCard() {
@@ -658,9 +752,34 @@
                                 ${userWinsTable}
                             </table>
                         </div>
+                        <div class="action-box">
+                            <h5>所有上一期中奖记录</h5>
+                            <button class="action-button view-all-wins-button">加载所有上一期中奖记录</button>
+                            <div class="pagination" id="pagination">
+                                <button class="action-button prev-page" disabled>上一页</button>
+                                <span id="pageInfo" style="margin: 0 12px;">第 1 页 / 共 1 页</span>
+                                <button class="action-button next-page" disabled>下一页</button>
+                            </div>
+                            <table class="history-table" id="allPreviousWinsTable">
+                                <tr>
+                                    <th>用户地址</th>
+                                    <th>周期</th>
+                                    <th>代币</th>
+                                    <th>投注金额</th>
+                                    <th>中奖金额</th>
+                                    <th>号码</th>
+                                    <th>状态</th>
+                                </tr>
+                                <tr><td colspan="7">点击按钮加载记录</td></tr>
+                            </table>
+                        </div>
                     </div>
                 `;
                 setupCardListeners(card, contract, tokenBalances);
+                document.querySelector(".view-all-wins-button").addEventListener("click", () => {
+                    currentWinsPage = 0;
+                    loadAllPreviousWins(currentWinsPage);
+                });
                 setInterval(() => {
                     document.getElementById("cstTime").innerText = getCSTTime();
                 }, 1000);
