@@ -443,7 +443,8 @@
                 }
                 document.getElementById("connectWalletButton").innerText = shortenAddress(account);
                 showStatus("已连接到Shibarium");
-                await loadActionCard();
+                currentBetPage = 0;
+                await loadActionCard(0);
             } catch (error) {
                 showStatus(`连接失败：${error.message}`, true);
                 console.error("钱包连接失败:", error);
@@ -542,13 +543,17 @@
                     }
 
                     try {
-                        console.log(`调用 getUserRecentWins(account=${account})...`);
+                        console.log(`查询最近10个周期的中奖记录 (account=${account})...`);
                         userWins = [];
                         for (let p = currentPeriod - 9; p < currentPeriod; p++) {
                             if (p >= 0) {
-                                let wins = await contract.methods.getUserRecentWins(account).call();
-                                if (Array.isArray(wins)) {
-                                    userWins = userWins.concat(wins.filter(win => win.period == p));
+                                try {
+                                    let wins = await contract.methods.getUserRecentWins(account).call();
+                                    if (Array.isArray(wins)) {
+                                        userWins = userWins.concat(wins.filter(win => win.period == p));
+                                    }
+                                } catch (e) {
+                                    console.warn(`getUserRecentWins (period=${p}) 失败: ${e.message}`);
                                 }
                             }
                         }
@@ -604,7 +609,7 @@
                             <td>${win.claimed ? "已领取" : "未领取"}</td>
                         </tr>
                     `;
-                }).join("") : "<tr><td colspan='6'>无近期中奖记录</td></tr>";
+                }).join("") : "<tr><td colspan='6'>无近期中奖记录，请确认是否中奖或等待开奖</td></tr>";
                 const loadMoreButton = userBets.total > (page + 1) * betPageSize ? `<button class="action-button load-more-button">加载更多投注记录</button>` : "";
 
                 card.innerHTML = `
@@ -761,23 +766,6 @@
 
             betButton.addEventListener("click", async () => await placeBet(card, contract));
             claimRewardsButton.addEventListener("click", async () => await claimRewards(card, contract));
-
-            // 监听 BetPlaced 事件
-            contract.events.BetPlaced({ filter: { user: account }, fromBlock: "latest" })
-                .on("data", async () => {
-                    console.log("检测到 BetPlaced 事件，重新加载记录");
-                    currentBetPage = 0;
-                    await loadActionCard(0);
-                })
-                .on("error", (error) => console.warn("BetPlaced 事件监听失败:", error));
-
-            // 监听 WinningNumberSet 事件
-            contract.events.WinningNumberSet({ fromBlock: "latest" })
-                .on("data", async () => {
-                    console.log("检测到 WinningNumberSet 事件，重新加载记录");
-                    await loadActionCard(currentBetPage);
-                })
-                .on("error", (error) => console.warn("WinningNumberSet 事件监听失败:", error));
         }
 
         function selectBetAmount(amount, card) {
@@ -865,7 +853,7 @@
                 currentBetPage = 0;
                 await loadActionCard(0);
             } catch (e) {
-                const msg = e.code === 4001 ? "用户拒绝交易。" : e.message.includes("revert") ? "交易被回StereoTypingError: Transaction reverted by the EVM." : e.message;
+                const msg = e.code === 4001 ? "用户拒绝交易。" : e.message.includes("revert") ? "交易被回滚，可能余额不足或合约限制。" : e.message;
                 showStatus(`投注失败：${msg}`, true);
                 console.error("投注失败:", e);
             } finally {
@@ -903,7 +891,7 @@
                 console.log("领取奖励...");
                 await contract.methods.claimRewards(currentPeriod - 1).send({ from: account });
                 showStatus("奖励领取成功！");
-                currentBetPage = 0;
+                currentlyBetPage = 0;
                 await loadActionCard(0);
             } catch (e) {
                 const msg = e.code === 4001 ? "用户拒绝交易。" : e.message.includes("revert") ? "无奖励可领取或周期过旧。" : e.message;
@@ -922,7 +910,7 @@
                 return;
             }
             if (await tryInitializeWeb3()) {
-                await loadActionCard();
+                await loadActionCard(0);
             } else {
                 showStatus("无法连接到Shibarium。", true);
                 document.getElementById("actionCard").innerHTML = `
