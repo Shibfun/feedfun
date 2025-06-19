@@ -329,7 +329,11 @@
     <div id="searchStatus" class="status"></div>
     <div class="global-spinner" id="globalSpinner"></div>
     <div class="container">
-        <div class="card" id="actionCard"></div>
+        <div class="card" id="actionCard">
+            <div class="card-content">
+                <p class="description">加载中，请稍候...</p>
+            </div>
+        </div>
     </div>
     <div class="footer">
         由 <a href="https://shibarium.shib.io/" target="_blank">Shibarium</a> 提供支持 | ShibClub © 2025
@@ -362,7 +366,7 @@
         ];
         const erc20Abi = [
             {"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-            {"inputs":[{"internalType":"address","name":"spender","type":"address"},{"internalType":"uint256","name":"value","type":"uint256"}],"name":"approve","outputs":[{"bool"}],"stateMutability":"nonpayable","type":"function"},
+            {"inputs":[{"internalType":"address","name":"spender","type":"address"},{"internalType":"uint256","name":"value","type":"uint256"}],"name":"approve","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},
             {"inputs":[{"internalType":"address","name":"owner","type":"address"},{"internalType":"address","name":"spender","type":"address"}],"name":"allowance","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
         ];
         const tokens = [
@@ -466,70 +470,19 @@
                     throw new Error("无法连接到Shibarium");
                 }
                 const contract = new web3.eth.Contract(contractAbi, contractAddress);
-                
-                // 独立调用，防止单一失败影响整体
-                let currentPeriod = 0;
-                try {
-                    console.log("调用 getCurrentPeriod...");
-                    currentPeriod = await contract.methods.getCurrentPeriod().call();
-                } catch (e) {
-                    console.warn("getCurrentPeriod 失败:", e.message);
-                }
 
-                let isBettingTime = false;
-                try {
-                    console.log("调用 isBettingTime...");
-                    isBettingTime = await contract.methods.isBettingTime().call();
-                } catch (e) {
-                    console.warn("isBettingTime 失败:", e.message);
-                }
-
-                let isPaused = true;
-                try {
-                    console.log("调用 paused...");
-                    isPaused = await contract.methods.paused().call();
-                } catch (e) {
-                    console.warn("paused 失败:", e.message);
-                }
-
-                let poolBalances = { bone: "0", feed: "0", neko: "0", toys: "0", canned: "0" };
-                try {
-                    console.log("调用 getPoolBalances...");
-                    poolBalances = await contract.methods.getPoolBalances().call();
-                } catch (e) {
-                    console.warn("getPoolBalances 失败:", e.message);
-                }
-
-                let userBets = { bets: [], total: 0 };
-                let userWins = [];
+                // 默认值，确保页面渲染
                 let tokenBalances = {};
                 let betsRemaining = {};
+                let currentPeriod = 0;
+                let isBettingTime = false;
+                let isPaused = true;
+                let poolBalances = { bone: "0", feed: "0", neko: "0", toys: "0", canned: "0" };
+                let userBets = { bets: [], total: 0 };
+                let userWins = [];
 
+                // 优先加载余额
                 if (account) {
-                    try {
-                        console.log("调用 getUserBets...");
-                        userBets = await contract.methods.getUserBets(account, 0, 10).call();
-                        if (!userBets || !Array.isArray(userBets.bets)) {
-                            userBets = { bets: [], total: 0 };
-                            console.warn("getUserBets 返回非预期数据，设为默认值");
-                        }
-                    } catch (e) {
-                        console.warn("getUserBets 失败:", e.message);
-                        userBets = { bets: [], total: 0 };
-                    }
-
-                    try {
-                        console.log("调用 getUserRecentWins...");
-                        userWins = await contract.methods.getUserRecentWins(account).call();
-                        if (!Array.isArray(userWins)) {
-                            userWins = [];
-                            console.warn("getUserRecentWins 返回非预期数据，设为默认值");
-                        }
-                    } catch (e) {
-                        console.warn("getUserRecentWins 失败:", e.message);
-                        userWins = [];
-                    }
-
                     for (const token of tokens) {
                         try {
                             console.log(`查询 ${token.name} 余额...`);
@@ -540,15 +493,72 @@
                                 tokenBalances[token.name] = parseFloat(web3.utils.fromWei(await tokenContract.methods.balanceOf(account).call(), "ether"));
                             }
                         } catch (e) {
-                            console.warn(`查询 ${token.name} 余额失败:`, e.message);
+                            console.warn(`查询 ${token.name} 余额失败: ${e.message}`);
                             tokenBalances[token.name] = 0;
                         }
+                    }
+                }
 
+                // 加载其他数据
+                try {
+                    console.log("调用 getCurrentPeriod...");
+                    currentPeriod = await contract.methods.getCurrentPeriod().call();
+                } catch (e) {
+                    console.warn("getCurrentPeriod 失败: ${e.message}");
+                }
+
+                try {
+                    console.log("调用 isBettingTime...");
+                    isBettingTime = await contract.methods.isBettingTime().call();
+                } catch (e) {
+                    console.warn("isBettingTime 失败: ${e.message}");
+                }
+
+                try {
+                    console.log("调用 paused...");
+                    isPaused = await contract.methods.paused().call();
+                } catch (e) {
+                    console.warn("paused 失败: ${e.message}");
+                }
+
+                try {
+                    console.log("调用 getPoolBalances...");
+                    poolBalances = await contract.methods.getPoolBalances().call();
+                } catch (e) {
+                    console.warn("getPoolBalances 失败: ${e.message}");
+                }
+
+                if (account) {
+                    try {
+                        console.log("调用 getUserBets...");
+                        userBets = await contract.methods.getUserBets(account, 0, 10).call();
+                        if (!userBets || !Array.isArray(userBets.bets)) {
+                            console.warn("getUserBets 返回非预期数据，设为默认值");
+                            userBets = { bets: [], total: 0 };
+                        }
+                    } catch (e) {
+                        console.warn("getUserBets 失败: ${e.message}");
+                        userBets = { bets: [], total: 0 };
+                    }
+
+                    try {
+                        console.log("调用 getUserRecentWins...");
+                        userWins = await contract.methods.getUserRecentWins(account).call();
+                        if (!Array.isArray(userWins)) {
+                            console.warn("getUserRecentWins 返回非预期数据，设为默认值");
+                            userWins = [];
+                        }
+                    } catch (e) {
+                        console.warn("getUserRecentWins 失败: ${e.message}");
+                        userWins = [];
+                    }
+
+                    for (const token of tokens) {
                         try {
                             console.log(`查询 ${token.name} 剩余投注次数...`);
                             betsRemaining[token.name] = 200 - await contract.methods.betsPerPeriod(currentPeriod, account, token.address).call();
                         } catch (e) {
-                            console.warn(`查询 ${token.name} 剩余投注次数失败:`, e.message);
+                            console.warn(`查询 ${token.name} 剩余投注次数失败: ${e.message}`);
                             betsRemaining[token.name] = 200;
                         }
                     }
@@ -657,10 +667,20 @@
                 setInterval(() => {
                     document.getElementById("cstTime").innerText = getCSTTime();
                 }, 1000);
-                showStatus();
+                showStatus("加载完成");
             } catch (e) {
                 showStatus(`加载数据失败：${e.message}`, true);
                 console.error("加载数据失败:", e);
+                // 渲染基础界面
+                card.innerHTML = `
+                    <div class="card-header">
+                        <h3>FEED 投注合约</h3>
+                    </div>
+                    <div class="card-content">
+                        <h4>FEED 投注</h4>
+                        <p class="description">无法加载数据，请检查网络或钱包连接。</p>
+                    </div>
+                `;
             } finally {
                 spinner.style.display = "none";
             }
@@ -714,7 +734,7 @@
                     isBettingTime = await contract.methods.isBettingTime().call();
                     isPaused = await contract.methods.paused().call();
                 } catch (e) {
-                    console.warn("更新投注按钮状态失败:", e.message);
+                    console.warn("更新投注按钮状态失败: ${e.message}");
                 }
                 const isValid = tokenAddress && selectedAmount && number >= 1 && number <= 49 && isBettingTime && !isPaused && betsRemaining > 0;
                 betButton.disabled = !account || !isValid;
@@ -755,7 +775,7 @@
             try {
                 isPaused = await contract.methods.paused().call();
             } catch (e) {
-                console.warn("检查暂停状态失败:", e.message);
+                console.warn("检查暂停状态失败: ${e.message}");
             }
             if (isPaused) {
                 showStatus("合约已暂停。", true);
@@ -782,7 +802,7 @@
             try {
                 isBettingTime = await contract.methods.isBettingTime().call();
             } catch (e) {
-                console.warn("检查投注时间失败:", e.message);
+                console.warn("检查投注时间失败: ${e.message}");
             }
             if (!isBettingTime) {
                 showStatus("当前非投注时间。", true);
@@ -831,13 +851,13 @@
             try {
                 currentPeriod = await contract.methods.getCurrentPeriod().call();
             } catch (e) {
-                console.warn("获取当前周期失败:", e.message);
+                console.warn("获取当前周期失败: ${e.message}");
             }
             let isPaused = true;
             try {
                 isPaused = await contract.methods.paused().call();
             } catch (e) {
-                console.warn("检查暂停状态失败:", e.message);
+                console.warn("检查暂停状态失败: ${e.message}");
             }
             if (isPaused) {
                 showStatus("合约已暂停。", true);
@@ -872,6 +892,15 @@
                 await loadActionCard();
             } else {
                 showStatus("无法连接到Shibarium。", true);
+                document.getElementById("actionCard").innerHTML = `
+                    <div class="card-header">
+                        <h3>FEED 投注合约</h3>
+                    </div>
+                    <div class="card-content">
+                        <h4>FEED 投注</h4>
+                        <p class="description">无法连接到Shibarium网络，请检查网络设置。</p>
+                    </div>
+                `;
             }
         });
 
