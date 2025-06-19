@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HACHI Betting</title>
+    <link rel="icon" type="image/png" href="https://shibarium.fun/images/favicon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #121212;
+            color: #E0E0E0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 16px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .header h1 {
+            font-size: clamp(1.8rem, 5vw, 2.5rem);
+            font-weight: 700;
+            color: #FF8C00;
+            letter-spacing: 1px;
+        }
+        .connect-section {
+            margin-bottom: 16px;
+        }
+        .connect-section button {
+            padding: 10px 24px;
+            background: linear-gradient(45deg, #FF8C00, #FFA500);
+            color: #FFF;
+            border: none;
+            border-radius: 24px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: transform 0.2s, background 0.3s;
+        }
+        .connect-section button:hover {
+            transform: scale(1.05);
+            background: linear-gradient(45deg, #FFA500, #FF8C00);
+        }
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 24px;
+            justify-content: center;
+        }
+        .card {
+            background: #1E1E1E;
+            border: 1px solid #333;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            max-width: 500px;
+            display: flex;
+            flex-direction: column;
+        }
+        .card-header {
+            display: flex;
+            align-items: center;
+            padding: 16px;
+            background: #252525;
+            border-bottom: 1px solid #333;
+        }
+        .card-header h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            flex-grow: 1;
+            color: #E0E0E0;
+        }
+        .card-header .copy-button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 6px;
+            position: relative;
+        }
+        .card-header .copy-button img {
+            width: 18px;
+            height: 18px;
+            filter: invert(1);
+        }
+        .card-header .copy-button .tooltip {
+            visibility: hidden;
+            background: #FF8C00;
+            color: #FFF;
+            font-size: 0.8rem;
+            padding: 4px 8px;
+            border-radius: 4px;
+            position: absolute;
+            top: -30px;
+            right: 0;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .card-header .copy-button.copied .tooltip {
+            visibility: visible;
+            opacity: 1;
+        }
+        .card-content {
+            padding: 16px;
+            flex-grow: 1;
+        }
+        .card-content h4 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #FF8C00;
+        }
+        .card-content p.description {
+            font-size: 0.9rem;
+            color: #B0B0B0;
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+        .action-section {
+            padding: 16px;
+            border-top: 1px solid #333;
+        }
+        .action-box {
+            background: #252525;
+            padding: 12px;
+            border-radius: 12px;
+            margin-bottom: 12px;
+        }
+        .action-box h5 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #FF8C00;
+            margin-bottom: 8px;
+        }
+        .action-box select, .action-box input {
+            width: 100%;
+            padding: 8px;
+            background: #1E1E1E;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: #E0E0E0;
+            font-size: 0.85rem;
+            outline: none;
+            margin-bottom: 8px;
+        }
+        .action-box input {
+            text-align: right;
+        }
+        .percentage-buttons {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+        .percentage-buttons button {
+            padding: 0;
+            background: #333;
+            border: 1px solid #444;
+            border-radius: 6px;
+            cursor: pointer;
+            color: #E0E0E0;
+            font-size: 0.8rem;
+            font-weight: 600;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .percentage-buttons button:hover {
+            background: #FF8C00;
+            color: #FFF;
+            transform: scale(1.05);
+        }
+        .percentage-buttons button.active {
+            background: linear-gradient(45deg, #FF8C00, #FFA500);
+            color: #FFF;
+            border-color: #FF8C00;
+        }
+        .action-box .action-button {
+            padding: 8px;
+            background: linear-gradient(45deg, #FF8C00, #FFA500);
+            color: #FFF;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            width: 100%;
+            font-size: 0.85rem;
+            position: relative;
+            transition: background 0.3s;
+            margin-bottom: 8px;
+        }
+        .action-box .action-button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        .action-box .action-button:hover:not(:disabled) {
+            background: linear-gradient(45deg, #FFA500, #FF8C00);
+        }
+        .action-box .action-button .spinner {
+            display: none;
+            border: 2px solid #FFF;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            width: 14px;
+            height: 14px;
+            animation: spin 1s linear infinite;
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .action-box .action-button.loading .spinner {
+            display: block;
+        }
+        .status-box {
+            font-size: 0.9rem;
+            color: #B0B0B0;
+            margin-bottom: 12px;
+        }
+        .status-box p {
+            margin: 4px 0;
+        }
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+            color: #E0E0E0;
+            margin-top: 12px;
+        }
+        .history-table th, .history-table td {
+            padding: 6px;
+            border: 1px solid #333;
+            text-align: left;
+        }
+        .history-table th {
+            background: #252525;
+            color: #FF8C00;
+        }
+        .global-spinner {
+            border: 4px solid #FF8C00;
+            border-top: 4px solid transparent;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 24px auto;
+            display: none;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .status {
+            font-size: 0.9rem;
+            color: #FF8C00;
+            text-align: center;
+            margin: 12px 0;
+        }
+        .footer {
+            font-size: 0.8rem;
+            color: #B0B0B0;
+            text-align: center;
+            margin-top: auto;
+            padding: 16px;
+        }
+        .footer a {
+            color: #FF8C00;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .footer a:hover {
+            color: #FFA500;
+        }
+        @media (max-width: 768px) {
+            body {
+                padding: 12px;
+            }
+            .header h1 {
+                font-size: 1.8rem;
+            }
+            .card {
+                max-width: 100%;
+            }
+            .card-header h3 {
+                font-size: 1rem;
+            }
+            .card-content h4 {
+                font-size: 1.2rem;
+            }
+            .card-content p.description {
+                font-size: 0.85rem;
+            }
+            .percentage-buttons {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>HACHI Betting</h1>
+    </div>
+    <div class="connect-section">
+        <button id="connectWalletButton">Connect Wallet</button>
+    </div>
+    <div id="searchStatus" class="status"></div>
+    <div class="global-spinner" id="globalSpinner"></div>
+    <div class="container">
+        <div class="card" id="actionCard"></div>
+    </div>
+    <div class="footer">
+        Powered by <a href="https://shibarium.shib.io/" target="_blank">Shibarium</a> | ShibClub © 2025
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.7.0/dist/web3.min.js"></script>
+    <script>
+        let web3, account;
+        const contractAddress = "0xc3ccFd3973e830c08053D88b7dbf21ED0e873948";
+        const shibarium = {
+            chainId: "0x6d",
+            chainName: "Shibarium",
+            nativeCurrency: { name: "BONE", symbol: "BONE", decimals: 18 },
+            rpcUrls: ["https://rpc.shibrpc.com", "https://www.shibrpc.com"],
+            blockExplorerUrls: ["https://shibariumscan.io"]
+        };
+        const contractAbi = [
+            {"inputs":[{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"uint256","name":"number","type":"uint256"}],"name":"placeBet","outputs":[],"stateMutability":"payable","type":"function"},
+            {"inputs":[{"internalType":"uint256","name":"period","type":"uint256"}],"name":"claimRewards","outputs":[],"stateMutability":"nonpayable","type":"function"},
+            {"inputs":[{"internalType":"address","name":"user","type":"address"},{"internalType":"uint256","name":"page","type":"uint256"},{"internalType":"uint256","name":"pageSize","type":"uint256"}],"name":"getUserBets","outputs":[{"components":[{"internalType":"address","name":"user","type":"address"},{"internalType":"uint256","name":"period","type":"uint256"},{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"uint256","name":"number","type":"uint256"},{"internalType":"uint46","name":"timestamp","type":"uint256"}],"internalType":"struct BettingContract.Bet[]","name":"","type":"tuple[]"},{"internalType":"uint256","name":"total","type":"uint256"}],"stateMutability":"view","type":"function"},
+            {"inputs":[{"internalType":"address","name":"user","type":"address"}],"name":"getUserRecentWins","outputs":[{"components":[{"internalType":"address","name":"user","type":"address"},{"internalType":"uint256","name":"period","type":"uint256"},{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"betAmount","type":"uint256"},{"internalType":"uint256","name":"winAmount","type":"uint256"},{"internalType":"uint256","name":"number","type":"uint256"},{"internalType":"bool","name":"claimed","type":"bool"},{"internalType":"uint46","name":"timestamp","type":"uint256"}],"internalType":"struct BettingContract.Win[]","name":"","type":"tuple[]"}],"stateMutability":"view","type":"function"},
+            {"inputs":[],"name":"getCurrentPeriod","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+            {"inputs":[{"internalType":"uint256","name":"period","type":"uint256"}],"name":"getHistoricalWinners","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+            {"inputs":[],"name":"getPoolBalances","outputs":[{"internalType":"uint256","name":"bone","type":"uint256"},{"internalType":"uint256","name":"feed","type":"uint256"},{"internalType":"uint256","name":"neko","type":"uint256"},{"internalType":"uint256","name":"toys","type":"uint256"},{"internalType":"uint256","name":"canned","type":"uint256"}],"stateMutability":"view","type":"function"},
+            {"inputs":[],"name":"isBettingTime","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
+            {"inputs":[{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"isValidAmount","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
+            {"inputs":[{"internalType":"address","name":"token","type":"address"}],"name":"getPoolBalance","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
+        ];
+        const erc20Abi = [
+            {"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+            {"inputs":[{"internalType":"address","name":"spender","type":"address"},{"internalType":"uint256","name":"value","type":"uint256"}],"name":"approve","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},
+            {"inputs":[{"internalType":"address","name":"owner","type":"address"},{"internalType":"address","name":"spender","type":"address"}],"name":"allowance","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
+        ];
+        const tokens = [
+            { name: "BONE", address: "0x0000000000000000000000000000000000000000", logo: "https://woofswap.finance/image/tokens/BONE.png" },
+            { name: "FEED", address: "0xe9Cb2D7ADC24Fc59FE00D6C0A0669BDF16805Fe0", logo: "https://woofswap.finance/image/tokens/feed.png" },
+            { name: "NEKO", address: "0x63A67329f761517570345eE86f791F74f9DC5461", logo: "https://woofswap.finance/image/tokens/neko.png" },
+            { name: "TOYS", address: "0xB820c8a74c8E4059661460C414821bC5820470D8", logo: "https://woofswap.finance/image/tokens/toys.png" },
+            { name: "CANNED", address: "0x5d63C604803BbF7919953b73c89309B5CBcc227a", logo: "https://woofswap.finance/image/tokens/CANNED.png" }
+        ];
+        const maxAllowance = "115792089237316195423570985008687907853269984665640564039457584007913129639935";
+
+        function shortenAddress(address) {
+            return address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "0x...";
+        }
+
+        function showStatus(message, isError = false) {
+            const status = document.getElementById("searchStatus");
+            status.innerText = message;
+            status.style.color = isError ? "#FF4444" : "#FF8C00";
+            setTimeout(() => { status.innerText = ""; }, 5000);
+        }
+
+        async function tryInitializeWeb3() {
+            for (const rpc of shibarium.rpcUrls) {
+                try {
+                    web3 = new Web3(rpc);
+                    await web3.eth.getBlockNumber();
+                    return true;
+                } catch (e) {
+                    console.warn(`RPC ${rpc} failed: ${e.message}`);
+                }
+            }
+            return false;
+        }
+
+        async function connectWallet() {
+            try {
+                if (!window.ethereum) {
+                    showStatus("Please install MetaMask.", true);
+                    return;
+                }
+                document.getElementById("searchStatus").innerText = "Connecting...";
+                document.getElementById("globalSpinner").style.display = "block";
+                web3 = new Web3(window.ethereum);
+                const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+                if (!accounts.length) {
+                    showStatus("Please unlock wallet.", true);
+                    return;
+                }
+                account = accounts[0];
+                const chainId = await web3.eth.getChainId();
+                if (Number(chainId) !== 109) {
+                    try {
+                        await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: shibarium.chainId }] });
+                    } catch (switchError) {
+                        if (switchError.code === 4902) {
+                            await window.ethereum.request({ method: "wallet_addEthereumChain", params: [shibarium] });
+                        } else {
+                            throw switchError;
+                        }
+                    }
+                }
+                document.getElementById("connectWalletButton").innerText = shortenAddress(account);
+                showStatus("Connected to Shibarium");
+                await loadActionCard();
+            } catch (error) {
+                showStatus(`Connection failed: ${error.message}`, true);
+                resetUI();
+            } finally {
+                document.getElementById("globalSpinner").style.display = "none";
+            }
+        }
+
+        function resetUI() {
+            document.getElementById("connectWalletButton").innerText = "Connect Wallet";
+            document.getElementById("searchStatus").innerText = "";
+            const actionButtons = document.querySelectorAll(".action-button");
+            actionButtons.forEach(btn => btn.disabled = true);
+        }
+
+        async function loadActionCard() {
+            const status = document.getElementById("searchStatus");
+            const card = document.getElementById("actionCard");
+            const spinner = document.getElementById("globalSpinner");
+            try {
+                status.innerText = "Loading data...";
+                spinner.style.display = "block";
+                if (!web3 && !await tryInitializeWeb3()) {
+                    showStatus("Failed to connect to Shibarium.", true);
+                    return;
+                }
+                const contract = new web3.eth.Contract(contractAbi, contractAddress);
+                let currentPeriod = await contract.methods.getCurrentPeriod().call();
+                let isBettingTime = await contract.methods.isBettingTime().call();
+                let poolBalances = await contract.methods.getPoolBalances().call();
+                let userBets = { bets: [], total: 0 };
+                let userWins = [];
+                let tokenBalances = {};
+
+                if (account) {
+                    userBets = await contract.methods.getUserBets(account, 0, 10).call();
+                    userWins = await contract.methods.getUserRecentWins(account).call();
+                    for (const token of tokens) {
+                        if (token.address === "0x0000000000000000000000000000000000000000") {
+                            tokenBalances[token.name] = web3.utils.fromWei(await web3.eth.getBalance(account), "ether");
+                        } else {
+                            const tokenContract = new web3.eth.Contract(erc20Abi, token.address);
+                            tokenBalances[token.name] = web3.utils.fromWei(await tokenContract.methods.balanceOf(account).call(), "ether");
+                        }
+                    }
+                }
+
+                const poolBalanceDisplay = `
+                    BONE: ${parseFloat(web3.utils.fromWei(poolBalances.bone, "ether")).toFixed(2)}<br>
+                    FEED: ${parseFloat(web3.utils.fromWei(poolBalances.feed, "ether")).toFixed(2)}<br>
+                    NEKO: ${parseFloat(web3.utils.fromWei(poolBalances.neko, "ether")).toFixed(2)}<br>
+                    TOYS: ${parseFloat(web3.utils.fromWei(poolBalances.toys, "ether")).toFixed(2)}<br>
+                    CANNED: ${parseFloat(web3.utils.fromWei(poolBalances.canned, "ether")).toFixed(2)}
+                `;
+                const bettingStatus = isBettingTime ? "Betting Open" : "Betting Closed (Draw Time)";
+                const betOptions = tokens.map(token => `
+                    <option value="${token.address}" data-name="${token.name}">${token.name}</option>
+                `).join("");
+                const userBetsTable = userBets.bets.length > 0 ? userBets.bets.map(bet => {
+                    const tokenName = tokens.find(t => t.address.toLowerCase() === bet.token.toLowerCase())?.name || "BONE";
+                    return `
+                        <tr>
+                            <td>${bet.period}</td>
+                            <td>${tokenName}</td>
+                            <td>${parseFloat(web3.utils.fromWei(bet.amount, "ether")).toFixed(2)}</td>
+                            <td>${bet.number}</td>
+                            <td>${new Date(bet.timestamp * 1000).toLocaleString()}</td>
+                        </tr>
+                    `;
+                }).join("") : "<tr><td colspan='5'>No bets found</td></tr>";
+                const userWinsTable = userWins.length > 0 ? userWins.map(win => {
+                    const tokenName = tokens.find(t => t.address.toLowerCase() === win.token.toLowerCase())?.name || "BONE";
+                    return `
+                        <tr>
+                            <td>${win.period}</td>
+                            <td>${tokenName}</td>
+                            <td>${parseFloat(web3.utils.fromWei(win.betAmount, "ether")).toFixed(2)}</td>
+                            <td>${parseFloat(web3.utils.fromWei(win.winAmount, "ether")).toFixed(2)}</td>
+                            <td>${win.number}</td>
+                            <td>${win.claimed ? "Claimed" : "Unclaimed"}</td>
+                        </tr>
+                    `;
+                }).join("") : "<tr><td colspan='6'>No wins found</td></tr>";
+
+                card.innerHTML = `
+                    <div class="card-header">
+                        <h3>HACHI Betting Contract</h3>
+                        <button class="copy-button" data-address="${contractAddress}">
+                            <img src="https://img.icons8.com/ios-filled/16/000000/contract.png" alt="Copy Contract">
+                            <span class="tooltip">Copied Contract</span>
+                        </button>
+                    </div>
+                    <div class="card-content">
+                        <h4>HACHI Betting</h4>
+                        <p class="description">Place bets with BONE, FEED, NEKO, TOYS, or CANNED on Shibarium. Choose a number between 1 and 49, and win 44x your bet if you match the winning number!</p>
+                    </div>
+                    <div class="action-section">
+                        <div class="status-box">
+                            <p>Current Period: ${currentPeriod}</p>
+                            <p>Betting Status: ${bettingStatus}</p>
+                            <p>Pool Balances:<br>${poolBalanceDisplay}</p>
+                        </div>
+                        <div class="action-box">
+                            <h5>Place Bet</h5>
+                            <select class="token-select">
+                                ${betOptions}
+                            </select>
+                            <input type="number" class="bet-amount" placeholder="Amount" step="0.01" min="0">
+                            <div class="percentage-buttons bet-percentages">
+                                <button data-percentage="25">25%</button>
+                                <button data-percentage="50">50%</button>
+                                <button data-percentage="75">75%</button>
+                                <button data-percentage="100">MAX</button>
+                            </div>
+                            <input type="number" class="bet-number" placeholder="Number (1-49)" step="1" min="1" max="49">
+                            <button class="action-button bet-button" disabled>Place Bet</button>
+                        </div>
+                        <div class="action-box">
+                            <h5>Claim Rewards</h5>
+                            <button class="action-button claim-rewards-button">Claim Rewards</button>
+                        </div>
+                        <div class="action-box">
+                            <h5>Your Bets</h5>
+                            <table class="history-table">
+                                <tr>
+                                    <th>Period</th>
+                                    <th>Token</th>
+                                    <th>Amount</th>
+                                    <th>Number</th>
+                                    <th>Time</th>
+                                </tr>
+                                ${userBetsTable}
+                            </table>
+                        </div>
+                        <div class="action-box">
+                            <h5>Your Recent Wins</h5>
+                            <table class="history-table">
+                                <tr>
+                                    <th>Period</th>
+                                    <th>Token</th>
+                                    <th>Bet Amount</th>
+                                    <th>Win Amount</th>
+                                    <th>Number</th>
+                                    <th>Status</th>
+                                </tr>
+                                ${userWinsTable}
+                            </table>
+                        </div>
+                    </div>
+                `;
+                setupCardListeners(card, contract);
+                showStatus();
+            } catch (e) {
+                showStatus(`Failed to load data: ${e.message}`, true);
+            } finally {
+                spinner.style.display = "none";
+            }
+        }
+
+        function setupCardListeners(card, contract) {
+            card.querySelectorAll(".copy-button").forEach(button => {
+                button.addEventListener("click", () => {
+                    navigator.clipboard.writeText(button.dataset.address).then(() => {
+                        button.classList.add("copied");
+                        setTimeout(() => button.classList.remove("copied"), 1000);
+                    }).catch(() => showStatus("Failed to copy address.", true));
+                });
+            });
+
+            const tokenSelect = card.querySelector(".token-select");
+            const betAmountInput = card.querySelector(".bet-amount");
+            const betNumberInput = card.querySelector(".bet-number");
+            const betButton = card.querySelector(".bet-button");
+            const claimRewardsButton = card.querySelector(".claim-rewards-button");
+
+            async function updateBetButton() {
+                const tokenAddress = tokenSelect.value;
+                const amount = parseFloat(betAmountInput.value);
+                const number = parseInt(betNumberInput.value);
+                const isBettingTime = await contract.methods.isBettingTime().call();
+                let isValid = false;
+                if (tokenAddress && !isNaN(amount) && amount > 0 && number >= 1 && number <= 49 && isBettingTime) {
+                    const isValidAmount = await contract.methods.isValidAmount(tokenAddress, web3.utils.toWei(amount.toString(), "ether")).call();
+                    isValid = isValidAmount;
+                }
+                betButton.disabled = !account || !isValid;
+            }
+
+            tokenSelect.addEventListener("change", updateBetButton);
+            betAmountInput.addEventListener("input", updateBetButton);
+            betNumberInput.addEventListener("input", updateBetButton);
+
+            card.querySelectorAll(".bet-percentages button").forEach(button => {
+                button.addEventListener("click", async () => {
+                    card.querySelectorAll(".bet-percentages button").forEach(btn => btn.classList.remove("active"));
+                    button.classList.add("active");
+                    await setBetAmount(button.dataset.percentage, card);
+                });
+            });
+
+            betButton.addEventListener("click", async () => await placeBet(card, contract));
+            claimRewardsButton.addEventListener("click", async () => await claimRewards(card, contract));
+        }
+
+        async function setBetAmount(percentage, card) {
+            if (!web3 || !account) {
+                showStatus("Please connect wallet.", true);
+                return;
+            }
+            const tokenSelect = card.querySelector(".token-select");
+            const tokenAddress = tokenSelect.value;
+            const tokenName = tokenSelect.options[tokenSelect.selectedIndex].dataset.name;
+            const betAmountInput = card.querySelector(".bet-amount");
+            let balance;
+            if (tokenAddress === "0x0000000000000000000000000000000000000000") {
+                balance = parseFloat(web3.utils.fromWei(await web3.eth.getBalance(account), "ether"));
+            } else {
+                const tokenContract = new web3.eth.Contract(erc20Abi, tokenAddress);
+                balance = parseFloat(web3.utils.fromWei(await tokenContract.methods.balanceOf(account).call(), "ether"));
+            }
+            const amount = percentage === "100" ? balance : balance * (percentage / 100);
+            betAmountInput.value = amount.toFixed(2);
+            betAmountInput.dispatchEvent(new Event("input"));
+        }
+
+        async function placeBet(card, contract) {
+            if (!web3 || !account) {
+                showStatus("Please connect wallet.", true);
+                return;
+            }
+            const tokenSelect = card.querySelector(".token-select");
+            const tokenAddress = tokenSelect.value;
+            const tokenName = tokenSelect.options[tokenSelect.selectedIndex].dataset.name;
+            const amount = parseFloat(card.querySelector(".bet-amount").value);
+            const number = parseInt(card.querySelector(".bet-number").value);
+            if (isNaN(amount) || amount <= 0) {
+                showStatus("Please enter a valid amount.", true);
+                return;
+            }
+            if (isNaN(number) || number < 1 || number > 49) {
+                showStatus("Please enter a number between 1 and 49.", true);
+                return;
+            }
+            const amountWei = web3.utils.toWei(amount.toString(), "ether");
+            const isValidAmount = await contract.methods.isValidAmount(tokenAddress, amountWei).call();
+            if (!isValidAmount) {
+                showStatus(`Invalid amount for ${tokenName}. Valid amounts: ${tokenAddress === "0x0000000000000000000000000000000000000000" ? "1, 5, 10, 50 BONE" : "100M, 1B, 5B, 10B " + tokenName}`, true);
+                return;
+            }
+            const isBettingTime = await contract.methods.isBettingTime().call();
+            if (!isBettingTime) {
+                showStatus("Betting is closed now.", true);
+                return;
+            }
+            const button = card.querySelector(".bet-button");
+            try {
+                button.classList.add("loading");
+                button.disabled = true;
+                showStatus("Processing bet...");
+                if (tokenAddress === "0x0000000000000000000000000000000000000000") {
+                    await contract.methods.placeBet(tokenAddress, amountWei, number).send({ from: account, value: amountWei });
+                } else {
+                    const tokenContract = new web3.eth.Contract(erc20Abi, tokenAddress);
+                    const balance = await tokenContract.methods.balanceOf(account).call();
+                    if (web3.utils.toBN(balance).lt(web3.utils.toBN(amountWei))) {
+                        showStatus(`Insufficient ${tokenName} balance.`, true);
+                        return;
+                    }
+                    const allowance = await tokenContract.methods.allowance(account, contractAddress).call();
+                    if (web3.utils.toBN(allowance).lt(web3.utils.toBN(amountWei))) {
+                        showStatus(`Approving ${tokenName}...`);
+                        await tokenContract.methods.approve(contractAddress, maxAllowance).send({ from: account });
+                    }
+                    await contract.methods.placeBet(tokenAddress, amountWei, number).send({ from: account });
+                }
+                showStatus("Bet placed successfully!");
+                await loadActionCard();
+            } catch (e) {
+                const msg = e.code === 4001 ? "User rejected transaction." : e.message.includes("revert") ? "Transaction reverted." : e.message;
+                showStatus(`Bet failed: ${msg}`, true);
+            } finally {
+                button.classList.remove("loading");
+                button.disabled = false;
+            }
+        }
+
+        async function claimRewards(card, contract) {
+            if (!web3 || !account) {
+                showStatus("Please connect wallet.", true);
+                return;
+            }
+            const currentPeriod = await contract.methods.getCurrentPeriod().call();
+            const button = card.querySelector(".claim-rewards-button");
+            try {
+                button.classList.add("loading");
+                button.disabled = true;
+                showStatus("Processing reward claim...");
+                await contract.methods.claimRewards(currentPeriod - 1).send({ from: account });
+                showStatus("Rewards claimed successfully!");
+                await loadActionCard();
+            } catch (e) {
+                const msg = e.code === 4001 ? "User rejected transaction." : e.message.includes("revert") ? "No rewards available or period too old." : e.message;
+                showStatus(`Claim failed: ${msg}`, true);
+            } finally {
+                button.classList.remove("loading");
+                button.disabled = false;
+            }
+        }
+
+        document.getElementById("connectWalletButton").addEventListener("click", connectWallet);
+        window.addEventListener("load", async () => {
+            if (!window.location.protocol.includes("http")) {
+                showStatus('Please run via server (e.g., "npx serve").', true);
+                return;
+            }
+            if (await tryInitializeWeb3()) {
+                await loadActionCard();
+            } else {
+                showStatus("Failed to connect to Shibarium.", true);
+            }
+        });
+
+        window.ethereum?.on("accountsChanged", async accounts => {
+            if (!accounts.length) {
+                resetUI();
+                showStatus("Wallet disconnected.", true);
+            } else {
+                account = accounts[0];
+                document.getElementById("connectWalletButton").innerText = shortenAddress(account);
+                await loadActionCard();
+            }
+        });
+
+        window.ethereum?.on("chainChanged", connectWallet);
+    </script>
+</body>
+</html>
