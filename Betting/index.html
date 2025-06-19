@@ -343,7 +343,7 @@
             chainId: "0x6d",
             chainName: "Shibarium",
             nativeCurrency: { name: "BONE", symbol: "BONE", decimals: 18 },
-            rpcUrls: ["https://rpc.shibrpc.com", "https://www.shibrpc.com"],
+            rpcUrls: ["https://rpc.shibrpc.com", "https://www.shibrpc.com", "https://shibarium-rpc.publicnode.com"],
             blockExplorerUrls: ["https://shibariumscan.io"]
         };
         const contractAbi = [
@@ -396,11 +396,13 @@
         async function tryInitializeWeb3() {
             for (const rpc of shibarium.rpcUrls) {
                 try {
+                    console.log(`尝试连接RPC: ${rpc}`);
                     web3 = new Web3(rpc);
                     await web3.eth.getBlockNumber();
+                    console.log(`RPC ${rpc} 连接成功`);
                     return true;
                 } catch (e) {
-                    console.warn(`RPC ${rpc} failed: ${e.message}`);
+                    console.warn(`RPC ${rpc} 连接失败: ${e.message}`);
                 }
             }
             return false;
@@ -438,6 +440,7 @@
                 await loadActionCard();
             } catch (error) {
                 showStatus(`连接失败：${error.message}`, true);
+                console.error("钱包连接失败:", error);
                 resetUI();
             } finally {
                 document.getElementById("globalSpinner").style.display = "none";
@@ -458,14 +461,18 @@
             try {
                 status.innerText = "加载数据...";
                 spinner.style.display = "block";
+                console.log("初始化Web3...");
                 if (!web3 && !await tryInitializeWeb3()) {
-                    showStatus("无法连接到Shibarium。", true);
-                    return;
+                    throw new Error("无法连接到Shibarium");
                 }
                 const contract = new web3.eth.Contract(contractAbi, contractAddress);
+                console.log("调用 getCurrentPeriod...");
                 let currentPeriod = await contract.methods.getCurrentPeriod().call();
+                console.log("调用 isBettingTime...");
                 let isBettingTime = await contract.methods.isBettingTime().call();
+                console.log("调用 paused...");
                 let isPaused = await contract.methods.paused().call();
+                console.log("调用 getPoolBalances...");
                 let poolBalances = await contract.methods.getPoolBalances().call();
                 let userBets = { bets: [], total: 0 };
                 let userWins = [];
@@ -473,15 +480,19 @@
                 let betsRemaining = {};
 
                 if (account) {
+                    console.log("调用 getUserBets...");
                     userBets = await contract.methods.getUserBets(account, 0, 10).call();
+                    console.log("调用 getUserRecentWins...");
                     userWins = await contract.methods.getUserRecentWins(account).call();
                     for (const token of tokens) {
+                        console.log(`查询 ${token.name} 余额...`);
                         if (token.address === "0x0000000000000000000000000000000000000000") {
                             tokenBalances[token.name] = parseFloat(web3.utils.fromWei(await web3.eth.getBalance(account), "ether"));
                         } else {
                             const tokenContract = new web3.eth.Contract(erc20Abi, token.address);
                             tokenBalances[token.name] = parseFloat(web3.utils.fromWei(await tokenContract.methods.balanceOf(account).call(), "ether"));
                         }
+                        console.log(`查询 ${token.name} 剩余投注次数...`);
                         betsRemaining[token.name] = 200 - await contract.methods.betsPerPeriod(currentPeriod, account, token.address).call();
                     }
                 }
@@ -593,6 +604,7 @@
                 showStatus();
             } catch (e) {
                 showStatus(`加载数据失败：${e.message}`, true);
+                console.error("加载数据失败:", e);
             } finally {
                 spinner.style.display = "none";
             }
@@ -642,8 +654,8 @@
                 const tokenAddress = tokenSelect.value;
                 const betsRemaining = parseInt(tokenSelect.options[tokenSelect.selectedIndex].dataset.remaining);
                 const number = parseInt(betNumberInput.value);
-                const isBettingTime = await contract.methods.isBettingTime().call();
-                const isPaused = await contract.methods.paused().call();
+                const isBettingTime = await contract.methods.isBettingTime().call().catch(() => false);
+                const isPaused = await contract.methods.paused().call().catch(() => true);
                 const isValid = tokenAddress && selectedAmount && number >= 1 && number <= 49 && isBettingTime && !isPaused && betsRemaining > 0;
                 betButton.disabled = !account || !isValid;
             }
@@ -679,7 +691,7 @@
             const balance = parseFloat(tokenSelect.options[tokenSelect.selectedIndex].dataset.balance);
             const amount = selectedAmount;
             const number = parseInt(card.querySelector(".bet-number").value);
-            const isPaused = await contract.methods.paused().call();
+            const isPaused = await contract.methods.paused().call().catch(() => true);
             if (isPaused) {
                 showStatus("合约已暂停。", true);
                 return;
@@ -701,7 +713,7 @@
                 return;
             }
             const amountWei = web3.utils.toWei(amount.toString(), "ether");
-            const isBettingTime = await contract.methods.isBettingTime().call();
+            const isBettingTime = await contract.methods.isBettingTime().call().catch(() => false);
             if (!isBettingTime) {
                 showStatus("当前非投注时间。", true);
                 return;
@@ -711,6 +723,7 @@
                 button.classList.add("loading");
                 button.disabled = true;
                 showStatus("处理投注中...");
+                console.log(`投注: 代币=${tokenName}, 金额=${amount}, 号码=${number}`);
                 if (tokenAddress === "0x0000000000000000000000000000000000000000") {
                     await contract.methods.placeBet(tokenAddress, amountWei, number).send({ from: account, value: amountWei });
                 } else {
@@ -732,6 +745,7 @@
             } catch (e) {
                 const msg = e.code === 4001 ? "用户拒绝交易。" : e.message.includes("revert") ? "交易被回滚。" : e.message;
                 showStatus(`投注失败：${msg}`, true);
+                console.error("投注失败:", e);
             } finally {
                 button.classList.remove("loading");
                 button.disabled = false;
@@ -743,8 +757,8 @@
                 showStatus("请连接钱包。", true);
                 return;
             }
-            const currentPeriod = await contract.methods.getCurrentPeriod().call();
-            const isPaused = await contract.methods.paused().call();
+            const currentPeriod = await contract.methods.getCurrentPeriod().call().catch(() => 0);
+            const isPaused = await contract.methods.paused().call().catch(() => true);
             if (isPaused) {
                 showStatus("合约已暂停。", true);
                 return;
@@ -754,12 +768,14 @@
                 button.classList.add("loading");
                 button.disabled = true;
                 showStatus("处理奖励领取中...");
+                console.log("领取奖励...");
                 await contract.methods.claimRewards(currentPeriod - 1).send({ from: account });
                 showStatus("奖励领取成功！");
                 await loadActionCard();
             } catch (e) {
                 const msg = e.code === 4001 ? "用户拒绝交易。" : e.message.includes("revert") ? "无奖励可领取或周期过旧。" : e.message;
                 showStatus(`领取失败：${msg}`, true);
+                console.error("领取奖励失败:", e);
             } finally {
                 button.classList.remove("loading");
                 button.disabled = false;
