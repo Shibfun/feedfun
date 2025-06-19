@@ -342,7 +342,7 @@
     <script src="https://cdn.jsdelivr.net/npm/web3@1.7.0/dist/web3.min.js"></script>
     <script>
         let web3, account, selectedAmount = null;
-        const contractAddress = "0xc3ccFd3973e830c08053D88b7dbf21ED0e873948";
+        const contractAddress = "0x941525fE4E3A9f7A60d9b24bC1Ba8CBDB620Db1c";
         const shibarium = {
             chainId: "0x6d",
             chainName: "Shibarium",
@@ -353,10 +353,9 @@
         const contractAbi = [
             {"inputs":[{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"uint256","name":"number","type":"uint256"}],"name":"placeBet","outputs":[],"stateMutability":"payable","type":"function"},
             {"inputs":[{"internalType":"uint256","name":"period","type":"uint256"}],"name":"claimRewards","outputs":[],"stateMutability":"nonpayable","type":"function"},
-            {"inputs":[{"internalType":"address","name":"user","type":"address"},{"internalType":"uint256","name":"page","type":"uint256"},{"internalType":"uint256","name":"pageSize","type":"uint256"}],"name":"getUserBets","outputs":[{"components":[{"internalType":"address","name":"user","type":"address"},{"internalType":"uint256","name":"period","type":"uint256"},{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"uint256","name":"number","type":"uint256"},{"internalType":"uint46","name":"timestamp","type":"uint256"}],"internalType":"struct BettingContract.Bet[]","name":"","type":"tuple[]"},{"internalType":"uint256","name":"total","type":"uint256"}],"stateMutability":"view","type":"function"},
-            {"inputs":[{"internalType":"address","name":"user","type":"address"}],"name":"getUserRecentWins","outputs":[{"components":[{"internalType":"address","name":"user","type":"address"},{"internalType":"uint256","name":"period","type":"uint256"},{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"betAmount","type":"uint256"},{"internalType":"uint256","name":"winAmount","type":"uint256"},{"internalType":"uint256","name":"number","type":"uint256"},{"internalType":"bool","name":"claimed","type":"bool"},{"internalType":"uint46","name":"timestamp","type":"uint256"}],"internalType":"struct BettingContract.Win[]","name":"","type":"tuple[]"}],"stateMutability":"view","type":"function"},
+            {"inputs":[{"internalType":"address","name":"user","type":"address"}],"name":"getUserCurrentBets","outputs":[{"components":[{"internalType":"address","name":"user","type":"address"},{"internalType":"uint256","name":"period","type":"uint256"},{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"uint256","name":"number","type":"uint256"},{"internalType":"uint256","name":"timestamp","type":"uint256"}],"internalType":"struct BettingContract.Bet[]","name":"","type":"tuple[]"}],"stateMutability":"view","type":"function"},
+            {"inputs":[{"internalType":"address","name":"user","type":"address"}],"name":"getUserPreviousWins","outputs":[{"components":[{"internalType":"address","name":"user","type":"address"},{"internalType":"uint256","name":"period","type":"uint256"},{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"betAmount","type":"uint256"},{"internalType":"uint256","name":"winAmount","type":"uint256"},{"internalType":"uint256","name":"number","type":"uint256"},{"internalType":"bool","name":"claimed","type":"bool"},{"internalType":"uint256","name":"timestamp","type":"uint256"}],"internalType":"struct BettingContract.Win[]","name":"","type":"tuple[]"}],"stateMutability":"view","type":"function"},
             {"inputs":[],"name":"getCurrentPeriod","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-            {"inputs":[{"internalType":"uint256","name":"period","type":"uint256"}],"name":"getHistoricalWinners","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
             {"inputs":[],"name":"getPoolBalances","outputs":[{"internalType":"uint256","name":"bone","type":"uint256"},{"internalType":"uint256","name":"feed","type":"uint256"},{"internalType":"uint256","name":"neko","type":"uint256"},{"internalType":"uint256","name":"toys","type":"uint256"},{"internalType":"uint256","name":"canned","type":"uint256"}],"stateMutability":"view","type":"function"},
             {"inputs":[],"name":"isBettingTime","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
             {"inputs":[{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"isValidAmount","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
@@ -377,8 +376,6 @@
             { name: "CANNED", address: "0x5d63C604803BbF7919953b73c89309B5CBcc227a", logo: "https://woofswap.finance/image/tokens/CANNED.png", validAmounts: [100000000, 1000000000, 5000000000, 10000000000] }
         ];
         const maxAllowance = "115792089237316195423570985008687907853269984665640564039457584007913129639935";
-        let currentBetPage = 0;
-        const betPageSize = 10;
 
         function shortenAddress(address) {
             return address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "0x...";
@@ -443,8 +440,7 @@
                 }
                 document.getElementById("connectWalletButton").innerText = shortenAddress(account);
                 showStatus("已连接到Shibarium");
-                currentBetPage = 0;
-                await loadActionCard(0);
+                await loadActionCard();
             } catch (error) {
                 showStatus(`连接失败：${error.message}`, true);
                 console.error("钱包连接失败:", error);
@@ -461,7 +457,7 @@
             actionButtons.forEach(btn => btn.disabled = true);
         }
 
-        async function loadActionCard(page = 0) {
+        async function loadActionCard() {
             const status = document.getElementById("searchStatus");
             const card = document.getElementById("actionCard");
             const spinner = document.getElementById("globalSpinner");
@@ -480,7 +476,7 @@
                 let isBettingTime = false;
                 let isPaused = false;
                 let poolBalances = { bone: "0", feed: "0", neko: "0", toys: "0", canned: "0" };
-                let userBets = { bets: [], total: 0 };
+                let userBets = [];
                 let userWins = [];
 
                 try {
@@ -508,43 +504,38 @@
                     }
 
                     try {
-                        console.log(`调用 getUserBets(account=${account}, page=${page}, pageSize=${betPageSize})...`);
-                        userBets = await contract.methods.getUserBets(account, page, betPageSize).call();
-                        if (!userBets || !Array.isArray(userBets.bets)) {
-                            console.warn("getUserBets 返回非预期数据，设为默认值");
-                            userBets = { bets: [], total: 0 };
+                        console.log(`调用 getUserCurrentBets(account=${account})...`);
+                        userBets = await contract.methods.getUserCurrentBets(account).call();
+                        if (!Array.isArray(userBets)) {
+                            console.warn("getUserCurrentBets 返回非预期数据，设为默认值");
+                            userBets = [];
                         }
-                        // 仅保留当前周期的记录
-                        userBets.bets = userBets.bets.filter(bet => bet.period == currentPeriod);
-                        userBets.total = userBets.bets.length;
-                        console.log("getUserBets (当前周期) 返回:", JSON.stringify(userBets));
+                        console.log("getUserCurrentBets 返回:", JSON.stringify(userBets));
                     } catch (e) {
-                        console.warn(`getUserBets 失败: ${e.message}`);
-                        userBets = { bets: [], total: 0 };
+                        console.warn(`getUserCurrentBets 失败: ${e.message}`);
+                        userBets = [];
                     }
 
                     try {
-                        console.log(`调用 getUserRecentWins(account=${account}, period=${currentPeriod - 1})...`);
-                        userWins = await contract.methods.getUserRecentWins(account).call();
+                        console.log(`调用 getUserPreviousWins(account=${account})...`);
+                        userWins = await contract.methods.getUserPreviousWins(account).call();
                         if (!Array.isArray(userWins)) {
-                            console.warn("getUserRecentWins 返回非预期数据，设为默认值");
+                            console.warn("getUserPreviousWins 返回非预期数据，设为默认值");
                             userWins = [];
                         }
-                        // 仅保留上一周期的记录
-                        userWins = userWins.filter(win => win.period == (currentPeriod - 1));
-                        console.log("getUserRecentWins (上一周期) 返回:", JSON.stringify(userWins));
+                        console.log("getUserPreviousWins 返回:", JSON.stringify(userWins));
                     } catch (e) {
-                        console.warn(`getUserRecentWins 失败: ${e.message}`);
+                        console.warn(`getUserPreviousWins 失败: ${e.message}`);
                         userWins = [];
                     }
 
                     for (const token of tokens) {
                         try {
                             console.log(`查询 ${token.name} 剩余投注次数...`);
-                            betsRemaining[token.name] = 200 - await contract.methods.betsPerPeriod(currentPeriod, account, token.address).call();
+                            betsRemaining[token.name] = 100 - await contract.methods.betsPerPeriod(currentPeriod, account, token.address).call();
                         } catch (e) {
                             console.warn(`查询 ${token.name} 剩余投注次数失败: ${e.message}`);
-                            betsRemaining[token.name] = 200;
+                            betsRemaining[token.name] = 100;
                         }
                     }
                 }
@@ -579,9 +570,9 @@
                 `;
                 const bettingStatus = isPaused ? "合约已暂停" : isBettingTime ? "投注开放" : "投注关闭（抽奖时间）";
                 const betOptions = tokens.map(token => `
-                    <option value="${token.address}" data-name="${token.name}" data-balance="${tokenBalances[token.name] || 0}" data-remaining="${betsRemaining[token.name] || 200}">${token.name} (余额: ${parseFloat(tokenBalances[token.name] || 0).toFixed(2)}, 剩余投注次数: ${betsRemaining[token.name] || 200})</option>
+                    <option value="${token.address}" data-name="${token.name}" data-balance="${tokenBalances[token.name] || 0}" data-remaining="${betsRemaining[token.name] || 100}">${token.name} (余额: ${parseFloat(tokenBalances[token.name] || 0).toFixed(2)}, 剩余投注次数: ${betsRemaining[token.name] || 100})</option>
                 `).join("");
-                const userBetsTable = userBets.bets.length > 0 ? userBets.bets.map(bet => {
+                const userBetsTable = userBets.length > 0 ? userBets.map(bet => {
                     const tokenName = tokens.find(t => t.address.toLowerCase() === bet.token.toLowerCase())?.name || "BONE";
                     return `
                         <tr>
@@ -606,7 +597,6 @@
                         </tr>
                     `;
                 }).join("") : "<tr><td colspan='6'>无上一周期中奖记录，请确认是否中奖</td></tr>";
-                const loadMoreButton = userBets.total > (page + 1) * betPageSize ? `<button class="action-button load-more-button">加载更多投注记录</button>` : "";
 
                 card.innerHTML = `
                     <div class="card-header">
@@ -642,7 +632,7 @@
                             <button class="action-button claim-rewards-button" ${isPaused ? 'disabled' : ''}>领取奖励</button>
                         </div>
                         <div class="action-box">
-                            <h5>您的投注记录 (当前周期 ${currentPeriod}，共 ${userBets.total} 条)</h5>
+                            <h5>您的投注记录 (当前周期 ${currentPeriod}, 共 ${userBets.length} 条)</h5>
                             <table class="history-table">
                                 <tr>
                                     <th>周期</th>
@@ -653,7 +643,6 @@
                                 </tr>
                                 ${userBetsTable}
                             </table>
-                            ${loadMoreButton}
                         </div>
                         <div class="action-box">
                             <h5>您的中奖记录 (上一周期 ${currentPeriod - 1})</h5>
@@ -671,7 +660,7 @@
                         </div>
                     </div>
                 `;
-                setupCardListeners(card, contract, tokenBalances, page);
+                setupCardListeners(card, contract, tokenBalances);
                 setInterval(() => {
                     document.getElementById("cstTime").innerText = getCSTTime();
                 }, 1000);
@@ -693,7 +682,7 @@
             }
         }
 
-        function setupCardListeners(card, contract, tokenBalances, currentPage) {
+        function setupCardListeners(card, contract, tokenBalances) {
             card.querySelectorAll(".copy-button").forEach(button => {
                 button.addEventListener("click", () => {
                     navigator.clipboard.writeText(button.dataset.address).then(() => {
@@ -709,14 +698,6 @@
             const claimRewardsButton = card.querySelector(".claim-rewards-button");
             const amountButtonsContainer = card.querySelector(".amount-buttons");
             const selectedAmountDisplay = card.querySelector(".selected-amount");
-            const loadMoreButton = card.querySelector(".load-more-button");
-
-            if (loadMoreButton) {
-                loadMoreButton.addEventListener("click", () => {
-                    currentBetPage++;
-                    loadActionCard(currentPage + 1);
-                });
-            }
 
             function updateAmountButtons() {
                 const tokenAddress = tokenSelect.value;
@@ -846,8 +827,7 @@
                     await contract.methods.placeBet(tokenAddress, amountWei, number).send({ from: account });
                 }
                 showStatus("投注成功！");
-                currentBetPage = 0;
-                await loadActionCard(0);
+                await loadActionCard();
             } catch (e) {
                 const msg = e.code === 4001 ? "用户拒绝交易。" : e.message.includes("revert") ? "交易被回滚，可能余额不足或合约限制。" : e.message;
                 showStatus(`投注失败：${msg}`, true);
@@ -887,8 +867,7 @@
                 console.log(`领取奖励 (周期=${currentPeriod - 1})...`);
                 await contract.methods.claimRewards(currentPeriod - 1).send({ from: account });
                 showStatus("奖励领取成功！");
-                currentBetPage = 0;
-                await loadActionCard(0);
+                await loadActionCard();
             } catch (e) {
                 const msg = e.code === 4001 ? "用户拒绝交易。" : e.message.includes("revert") ? "无奖励可领取或周期过旧。" : e.message;
                 showStatus(`领取失败：${msg}`, true);
@@ -906,7 +885,7 @@
                 return;
             }
             if (await tryInitializeWeb3()) {
-                await loadActionCard(0);
+                await loadActionCard();
             } else {
                 showStatus("无法连接到Shibarium。", true);
                 document.getElementById("actionCard").innerHTML = `
@@ -928,8 +907,7 @@
             } else {
                 account = accounts[0];
                 document.getElementById("connectWalletButton").innerText = shortenAddress(account);
-                currentBetPage = 0;
-                await loadActionCard(0);
+                await loadActionCard();
             }
         });
 
